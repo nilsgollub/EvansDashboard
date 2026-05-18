@@ -76,7 +76,7 @@ graph TD
     C -- Datenzufuhr --> D
 ```
 
-1.  **GPS-Thread (`src/gps_reader.py`):** Liest kontinuierlich mit `pyserial` und `pynmea2` die seriellen NMEA-Sätze (`$GPRMC` und `$GPGGA`) des GPS-Empfängers aus. Bei der Initialisierung werden proprietäre binäre UBX-Befehle (Automotive-Modus, GLONASS aktiv, AssistNow Autonomous AOP) direkt an den Chip geschickt und im NVRAM gespeichert, um den "Kaltstart" zu extrem zu beschleunigen. Er aktualisiert Geschwindigkeit, Position, Höhe und Satellitenzahl.
+1.  **GPS-Thread (`src/gps_reader.py`):** Liest kontinuierlich mit `pyserial` und `pynmea2` die seriellen NMEA-Sätze (`$GPRMC`, `$GPGGA` und `$GPGSV`) des GPS-Empfängers aus. Bei der Initialisierung werden proprietäre binäre UBX-Befehle (Automotive-Modus, AssistNow Autonomous AOP) direkt an den Chip geschickt und im NVRAM gespeichert, um den Kaltstart zu beschleunigen. `$GPGSV` (Satellites in View) liefert die Anzahl der sichtbaren Satelliten auch ohne gültigen Fix – ideal zur Diagnose des Empfangs.
 2.  **Progressiver Hybrid-API/Offline-Thread (`src/osm_api.py`):** Ermittelt alle 10 Sekunden das Tempolimit (`maxspeed`) und den Straßentyp (`highway`). Er sucht zuerst progressiv in der lokalen SQLite-Datenbank (`switzerland_roads.db`) mit Radien von 15m, 30m und 60m. Findet er dort keinen Eintrag, greift er über das Hotspot-WLAN transparent auf die Live-Overpass-API zu.
 3.  **Simulations-Thread (`src/main.py`):** Läuft im Hintergrund und simuliert eine fiktive Fahrt entlang einer Marly-Rundfahrtroute, sobald für mehr als 10 Sekunden kein echtes GPS-Signal detektiert wurde. Er rechnet realistische Trägheitsbeschleunigungen und Lenkwinkel ein.
 4.  **UI-Thread (`src/ui.py`):** Rendert das Dashboard in Pygame und zeichnet es mit hoher Performance direkt auf das Display, inklusive des schlagenden "LIVE GPS"-Herzens oder der statischen "SIMULATOR"-Anzeige.
@@ -162,6 +162,8 @@ Der NetworkManager speichert beide Verbindungen als Profile unter `/etc/NetworkM
 * **Verbindungsstatus anzeigen:** `nmcli connection show` (die aktive Verbindung ist grün markiert)
 * **Verfügbare WLANs scannen:** `nmcli device wifi list` (zeigt die SSID und die Empfangsstärke an)
 * **Gespeichertes Passwort im Klartext auslesen:** `sudo cat /etc/NetworkManager/system-connections/NiniHotspot.nmconnection`
+
+---
 
 ---
 

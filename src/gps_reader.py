@@ -52,19 +52,11 @@ class GPSReader:
                 except Exception as e:
                     print(f"[GPS] Fehler bei CFG-SBAS: {e}")
 
-                # Optimierung 3: GLONASS aktivieren (CFG-GNSS)
-                try:
-                    payload_gnss = (
-                        b'\x00\x20\x20\x02' # msgVer, numTrkChHw, numTrkChUse, numConfigBlocks
-                        b'\x00\x08\x10\x01' # GPS block (gnssId=0)
-                        b'\x06\x08\x0E\x01' # GLONASS block (gnssId=6)
-                    )
-                    self._send_ubx_msg(0x06, 0x3E, payload_gnss)
-                    print("[GPS] UBX CFG-GNSS (GPS+GLONASS) gesendet.")
-                except Exception as e:
-                    print(f"[GPS] Fehler bei CFG-GNSS: {e}")
+                # HINWEIS: CFG-GNSS (GLONASS) wurde entfernt.
+                # Der NEO-7M unterstützt nur GPS (kein GLONASS) und
+                # das CFG-GNSS Kommando existiert erst ab Protokoll v15 (NEO-M8+).
 
-                # Optimierung 4: AssistNow Autonomous (AOP) aktivieren (CFG-AOP)
+                # Optimierung 3: AssistNow Autonomous (AOP) aktivieren (CFG-AOP)
                 try:
                     cfg_aop_payload = b'\x01\x00\x00\x00'
                     self._send_ubx_msg(0x06, 0x33, cfg_aop_payload)
@@ -120,24 +112,42 @@ class GPSReader:
                     else:
                         print("[GPS] Suche nach Satelliten... (Noch kein GPS-Fix)")
                         
-                # GGA (Global Positioning System Fix Data) liefert uns Satelliten & Höhe
+                # GGA (Global Positioning System Fix Data) liefert uns Fix-Qualität & Höhe
                 elif line.startswith('$GPGGA') or line.startswith('$GNGGA'):
                     msg = pynmea2.parse(line)
                     
-                    # Satelliten werden vom Modul auch dann gemeldet, wenn noch kein voller Fix besteht
-                    try:
-                        if msg.num_sats:
-                            state_dict['sats'] = int(msg.num_sats)
-                    except (ValueError, TypeError):
-                        pass
-                        
                     if msg.gps_qual > 0:
+                        # Nur bei gültigem Fix: Höhe und Satelliten-im-Fix aktualisieren
                         try:
                             state_dict['altitude'] = float(msg.altitude)
                         except (ValueError, TypeError):
                             pass
+                        try:
+                            if msg.num_sats:
+                                state_dict['sats'] = int(msg.num_sats)
+                        except (ValueError, TypeError):
+                            pass
                         state_dict['last_update'] = time.time()
                         print(f"[GPS] GGA Update -> Sats: {msg.num_sats}, Alt: {msg.altitude}m")
+
+                # GSV (GPS Satellites in View) – zeigt sichtbare Satelliten AUCH OHNE FIX
+                # Das ist die wichtigste Diagnose-Information beim Kaltstart.
+                # GSV kommt in mehreren Sätzen (msg 1 of N, msg 2 of N, ...).
+                # Der erste Satz enthält die Gesamtanzahl der sichtbaren Satelliten.
+                elif line.startswith('$GPGSV') or line.startswith('$GNGSV'):
+                    msg = pynmea2.parse(line)
+                    # msg_num == 1 bedeutet: erster Satz der Serie, enthält num_sv_in_view
+                    if hasattr(msg, 'msg_num') and str(msg.msg_num) == '1':
+                        try:
+                            sats_in_view = int(msg.num_sv_in_view)
+                            # GSV überschreibt die Sat-Zahl nur, wenn KEIN Fix vorliegt.
+                            # Bei Fix hat GGA.num_sats Vorrang (Sats im Fix > Sats in View).
+                            if state_dict.get('last_update', 0.0) == 0.0 or \
+                               (time.time() - state_dict.get('last_update', 0.0)) >= 10.0:
+                                state_dict['sats'] = sats_in_view
+                            print(f"[GPS] GSV -> Satelliten in Sicht: {sats_in_view}")
+                        except (ValueError, TypeError, AttributeError):
+                            pass
                         
             except pynmea2.ParseError:
                 pass # Parse Errors passieren manchmal bei unvollständigen Sätzen
