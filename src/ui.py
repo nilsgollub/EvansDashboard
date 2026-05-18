@@ -1,6 +1,7 @@
 import pygame
 import math
 import time
+from datetime import datetime
 
 class DashboardUI:
     def __init__(self, width=480, height=320, fullscreen=False):
@@ -18,6 +19,11 @@ class DashboardUI:
         self.font_info = pygame.font.SysFont('arial', 22)
         self.font_compass = pygame.font.SysFont('arial', 14, bold=True)
         self.font_tag = pygame.font.SysFont('arial', 13, bold=True)
+        
+        # Neue Fonts für Zeit, Datum und Wetter
+        self.font_time = pygame.font.SysFont('arial', 48, bold=True)
+        self.font_date = pygame.font.SysFont('arial', 18)
+        self.font_weather = pygame.font.SysFont('arial', 20, bold=True)
         
         # Farben (RGB)
         self.COLOR_BG = (15, 15, 20)      # Sehr dunkles Blau-Grau
@@ -130,7 +136,7 @@ class DashboardUI:
         # Kleiner Pin in der Mitte
         pygame.draw.circle(self.screen, (80, 80, 90), (x, y), 3)
 
-    def render(self, current_speed, speed_limit, sats, road_type, altitude, heading, is_simulated=True, has_fix=True):
+    def render(self, current_speed, speed_limit, sats, road_type, altitude, heading, is_simulated=True, has_fix=True, weather_temp=None, weather_desc=None):
         # 1. Hintergrund löschen
         self.screen.fill(self.COLOR_BG)
         
@@ -226,5 +232,32 @@ class DashboardUI:
         alt_surface = self.font_info.render(f"Höhe: {int(altitude)}m | {heading_text} ({int(heading)}°)", True, self.COLOR_GRAY)
         self.screen.blit(alt_surface, (info_x, info_y_start + 56))
         
-        # 6. Display aktualisieren
+        # 7. Uhrzeit und Datum (Oben Mitte)
+        now = datetime.now()
+        time_str = now.strftime("%H:%M")
+        date_str = now.strftime("%d.%m.%Y")
+        
+        # Uhrzeit rendern (zentriert)
+        time_surf = self.font_time.render(time_str, True, self.COLOR_WHITE)
+        time_x = (self.width // 2) - (time_surf.get_width() // 2)
+        self.screen.blit(time_surf, (time_x, 20))
+        
+        # Datum rendern (zentriert unter Uhrzeit)
+        date_surf = self.font_date.render(date_str, True, self.COLOR_GRAY)
+        date_x = (self.width // 2) - (date_surf.get_width() // 2)
+        self.screen.blit(date_surf, (date_x, 75))
+        
+        # 8. Wetter (zentriert unter Datum)
+        if weather_temp is not None and weather_desc is not None:
+            weather_str = f"{weather_temp}°C | {weather_desc}"
+            weather_color = self.COLOR_YELLOW
+        else:
+            weather_str = "--°C | --"
+            weather_color = self.COLOR_DARK_GRAY
+            
+        weather_surf = self.font_weather.render(weather_str, True, weather_color)
+        weather_x = (self.width // 2) - (weather_surf.get_width() // 2)
+        self.screen.blit(weather_surf, (weather_x, 100))
+        
+        # 9. Display aktualisieren
         pygame.display.flip()

@@ -4,6 +4,7 @@ import threading
 import time
 import math
 import random
+import requests
 from ui import DashboardUI
 from osm_api import get_speed_limit
 from gps_reader import GPSReader
@@ -21,7 +22,9 @@ current_state = {
     'heading': 0.0,
     'lat': None,
     'lon': None,
-    'last_update': 0.0  # Timestamp des letzten echten GPS-Updates
+    'last_update': 0.0,  # Timestamp des letzten echten GPS-Updates
+    'weather_temp': None,
+    'weather_desc': None
 }
 
 def run_simulation():
@@ -150,6 +153,43 @@ def fetch_overpass_data():
         # Schnelleres Abfragen im Simulationsmodus am Anfang, sonst alle 10 Sekunden
         time.sleep(4 if current_state.get('last_update', 0.0) == 0.0 else 10)
 
+def fetch_weather_data():
+    """Holt das aktuelle Wetter von Open-Meteo (kostenlos, kein API Key) für die aktuelle Position"""
+    while True:
+        lat, lon = current_state.get('lat'), current_state.get('lon')
+        if lat is not None and lon is not None:
+            try:
+                # API Call Open-Meteo
+                url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+                response = requests.get(url, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    weather = data.get('current_weather', {})
+                    temp = weather.get('temperature')
+                    code = weather.get('weathercode')
+                    
+                    # WMO Weather interpretation codes
+                    weather_desc = "Unbekannt"
+                    if code == 0: weather_desc = "Klar"
+                    elif code in [1, 2, 3]: weather_desc = "Wolkig"
+                    elif code in [45, 48]: weather_desc = "Nebel"
+                    elif code in [51, 53, 55, 56, 57]: weather_desc = "Niesel"
+                    elif code in [61, 63, 65, 66, 67]: weather_desc = "Regen"
+                    elif code in [71, 73, 75, 77]: weather_desc = "Schnee"
+                    elif code in [80, 81, 82]: weather_desc = "Schauer"
+                    elif code in [85, 86]: weather_desc = "Schneeschauer"
+                    elif code in [95, 96, 99]: weather_desc = "Gewitter"
+                    
+                    if temp is not None:
+                        current_state['weather_temp'] = temp
+                        current_state['weather_desc'] = weather_desc
+                        print(f"[WEATHER] Wetter geupdatet: {temp}°C | {weather_desc}")
+            except Exception as e:
+                print(f"[WEATHER] Fehler beim Abrufen des Wetters: {e}")
+                
+        # Nur alle 15 Minuten abfragen
+        time.sleep(15 * 60)
+
 def main():
     # GPS Thread starten
     gps_reader = GPSReader()
@@ -163,6 +203,10 @@ def main():
     # Overpass API / Offline-DB Thread starten
     api_thread = threading.Thread(target=fetch_overpass_data, daemon=True)
     api_thread.start()
+    
+    # Wetter Thread starten
+    weather_thread = threading.Thread(target=fetch_weather_data, daemon=True)
+    weather_thread.start()
     
     # UI Initialisieren
     ui = DashboardUI(width=480, height=320, fullscreen=False)
@@ -198,7 +242,9 @@ def main():
             altitude=current_state['altitude'],
             heading=current_state['heading'],
             is_simulated=is_sim,
-            has_fix=has_fix
+            has_fix=has_fix,
+            weather_temp=current_state.get('weather_temp'),
+            weather_desc=current_state.get('weather_desc')
         )
         
         # 30 Frames per Second
