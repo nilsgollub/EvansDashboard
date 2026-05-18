@@ -8,6 +8,9 @@ from ui import DashboardUI
 from osm_api import get_speed_limit
 from gps_reader import GPSReader
 
+# Konfiguration
+SIMULATOR_ENABLED = False  # Auf True setzen, um Marly-Simulation bei GPS-Verlust zu aktivieren
+
 # Globale Variablen für Threading-Datenaustausch
 current_state = {
     'speed': 0.0,
@@ -26,6 +29,8 @@ def run_simulation():
     Simuliert eine Autofahrt durch Marly (Schweiz), wenn kein echtes GPS-Signal da ist.
     Die Simulation stoppt sofort und nahtlos, wenn echte GPS-Daten empfangen werden.
     """
+    if not SIMULATOR_ENABLED:
+        return
     # Marly-Rundkurs Koordinaten (Latitude, Longitude)
     marly_route = [
         (46.7836, 7.1643),  # Start: Route de Fribourg (Brücke)
@@ -122,7 +127,7 @@ def fetch_overpass_data():
         if lat is not None and lon is not None:
             # Letztes GPS-Update prüfen, um zu wissen, ob wir simulieren
             last_up = current_state.get('last_update', 0.0)
-            is_sim = (last_up == 0.0 or (time.time() - last_up) >= 10.0)
+            is_sim = SIMULATOR_ENABLED and (last_up == 0.0 or (time.time() - last_up) >= 10.0)
             
             prefix = "[API-SIM]" if is_sim else "[API]"
             print(f"{prefix} [{time.strftime('%H:%M:%S')}] Frage Tempolimit für Position {lat:.4f}, {lon:.4f} ab...")
@@ -174,9 +179,9 @@ def main():
                 if event.key == pygame.K_ESCAPE:
                     running = False
                     
-        # Prüfen, ob wir im Simulationsmodus sind (kein GPS-Update in den letzten 10s)
+        # Prüfen, ob wir im Simulationsmodus sind (kein GPS-Update in den letzten 10s und Simulation aktiv)
         last_up = current_state.get('last_update', 0.0)
-        is_sim = (last_up == 0.0 or (time.time() - last_up) >= 10.0)
+        is_sim = SIMULATOR_ENABLED and (last_up == 0.0 or (time.time() - last_up) >= 10.0)
         
         # Aktuellen State an UI übergeben
         ui.render(
