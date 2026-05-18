@@ -234,15 +234,15 @@ class DashboardUI:
         pygame.draw.line(self.screen, (40, 40, 50), (0, 260), (self.width, 260), 2)
         
         # 3.1 Kompass (Links)
-        compass_radius = 22
-        compass_x = 40
+        compass_radius = 28
+        compass_x = 45
         compass_y = 290
         self.draw_compass(compass_x, compass_y, compass_radius, heading)
         
         # 3.2 Himmelsrichtung & Höhe (Neben Kompass)
         heading_text = self.get_cardinal_direction(heading)
         alt_surface = self.font_info.render(f"{heading_text} | {int(altitude)}m", True, self.COLOR_GRAY)
-        self.screen.blit(alt_surface, (75, 278))
+        self.screen.blit(alt_surface, (85, 278))
         
         # 3.3 Strassentyp (Zentriert)
         road_key = str(road_type).lower()
