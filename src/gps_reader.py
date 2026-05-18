@@ -34,29 +34,51 @@ class GPSReader:
                 print(f"[GPS] Erfolgreich verbunden auf {port}")
                 
                 # Optimierung 1: Dynamisches Modell auf "Automotive" setzen (CFG-NAV5)
-                # Payload Length: 36 bytes, mask bit 0 (0x01) = apply dynModel
                 try:
                     nav5_payload = bytearray(36)
                     nav5_payload[0:2] = b'\x01\x00' # mask: apply dynModel
                     nav5_payload[2] = 4             # dynModel: 4 (Automotive)
                     nav5_payload[3] = 3             # fixMode: 3 (Auto 2D/3D)
                     self._send_ubx_msg(0x06, 0x24, nav5_payload)
-                    print("[GPS] UBX CFG-NAV5 (Automotive) erfolgreich gesendet.")
+                    print("[GPS] UBX CFG-NAV5 (Automotive) gesendet.")
                 except Exception as e:
                     print(f"[GPS] Fehler bei CFG-NAV5: {e}")
 
-                # Optimierung 2: AssistNow Autonomous (ANA) aktivieren (CFG-NAVX5)
-                # Payload Length: 40 bytes, mask2 bit 6 (0x40) = apply aopCfg
+                # Optimierung 2: SBAS deaktivieren (CFG-SBAS)
                 try:
-                    navx5_payload = bytearray(40)
-                    navx5_payload[0:2] = b'\x00\x00'         # version
-                    navx5_payload[2:4] = b'\x00\x00'         # mask1
-                    navx5_payload[4:8] = b'\x40\x00\x00\x00' # mask2: aopCfg flag
-                    navx5_payload[34] = 1                    # aopCfg: 1 (Enable AssistNow Autonomous)
-                    self._send_ubx_msg(0x06, 0x23, navx5_payload)
-                    print("[GPS] UBX CFG-NAVX5 (AssistNow Autonomous) erfolgreich gesendet.")
+                    payload_sbas_off = b'\x00\x00\x00\x00\x00\x00\x00\x00'
+                    self._send_ubx_msg(0x06, 0x16, payload_sbas_off)
+                    print("[GPS] UBX CFG-SBAS (Disabled) gesendet.")
                 except Exception as e:
-                    print(f"[GPS] Fehler bei CFG-NAVX5: {e}")
+                    print(f"[GPS] Fehler bei CFG-SBAS: {e}")
+
+                # Optimierung 3: GLONASS aktivieren (CFG-GNSS)
+                try:
+                    payload_gnss = (
+                        b'\x00\x20\x20\x02' # msgVer, numTrkChHw, numTrkChUse, numConfigBlocks
+                        b'\x00\x08\x10\x01' # GPS block (gnssId=0)
+                        b'\x06\x08\x0E\x01' # GLONASS block (gnssId=6)
+                    )
+                    self._send_ubx_msg(0x06, 0x3E, payload_gnss)
+                    print("[GPS] UBX CFG-GNSS (GPS+GLONASS) gesendet.")
+                except Exception as e:
+                    print(f"[GPS] Fehler bei CFG-GNSS: {e}")
+
+                # Optimierung 4: AssistNow Autonomous (AOP) aktivieren (CFG-AOP)
+                try:
+                    cfg_aop_payload = b'\x01\x00\x00\x00'
+                    self._send_ubx_msg(0x06, 0x33, cfg_aop_payload)
+                    print("[GPS] UBX CFG-AOP (AssistNow Autonomous) gesendet.")
+                except Exception as e:
+                    print(f"[GPS] Fehler bei CFG-AOP: {e}")
+
+                # Konfiguration dauerhaft im u-blox NVRAM speichern (CFG-CFG)
+                try:
+                    cfg_save_payload = b'\x00\x00\x00\x00\xff\xff\x00\x00\x00\x00\x00\x00\x01'
+                    self._send_ubx_msg(0x06, 0x09, cfg_save_payload)
+                    print("[GPS] UBX CFG-CFG (Save Config) gesendet.")
+                except Exception as e:
+                    print(f"[GPS] Fehler bei CFG-CFG: {e}")
                 
                 return True
             except serial.SerialException:
