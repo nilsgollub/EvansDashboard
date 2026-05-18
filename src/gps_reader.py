@@ -12,12 +12,52 @@ class GPSReader:
         self.serial_conn = None
         self.current_port = None
         
+    def _send_ubx_msg(self, msg_class, msg_id, payload):
+        """Hilfsfunktion zum Senden eines binären UBX-Kommandos an das U-Blox Modul."""
+        if not self.serial_conn or not self.serial_conn.is_open:
+            return
+        msg = bytes([msg_class, msg_id, len(payload) & 0xFF, (len(payload) >> 8) & 0xFF]) + payload
+        cka = 0
+        ckb = 0
+        for b in msg:
+            cka = (cka + b) & 0xFF
+            ckb = (ckb + cka) & 0xFF
+        packet = bytes([0xB5, 0x62]) + msg + bytes([cka, ckb])
+        self.serial_conn.write(packet)
+        self.serial_conn.flush()
+        
     def connect(self):
         for port in self.ports:
             try:
                 self.serial_conn = serial.Serial(port, self.baudrate, timeout=2)
                 self.current_port = port
                 print(f"[GPS] Erfolgreich verbunden auf {port}")
+                
+                # Optimierung 1: Dynamisches Modell auf "Automotive" setzen (CFG-NAV5)
+                # Payload Length: 36 bytes, mask bit 0 (0x01) = apply dynModel
+                try:
+                    nav5_payload = bytearray(36)
+                    nav5_payload[0:2] = b'\x01\x00' # mask: apply dynModel
+                    nav5_payload[2] = 4             # dynModel: 4 (Automotive)
+                    nav5_payload[3] = 3             # fixMode: 3 (Auto 2D/3D)
+                    self._send_ubx_msg(0x06, 0x24, nav5_payload)
+                    print("[GPS] UBX CFG-NAV5 (Automotive) erfolgreich gesendet.")
+                except Exception as e:
+                    print(f"[GPS] Fehler bei CFG-NAV5: {e}")
+
+                # Optimierung 2: AssistNow Autonomous (ANA) aktivieren (CFG-NAVX5)
+                # Payload Length: 40 bytes, mask2 bit 6 (0x40) = apply aopCfg
+                try:
+                    navx5_payload = bytearray(40)
+                    navx5_payload[0:2] = b'\x00\x00'         # version
+                    navx5_payload[2:4] = b'\x00\x00'         # mask1
+                    navx5_payload[4:8] = b'\x40\x00\x00\x00' # mask2: aopCfg flag
+                    navx5_payload[34] = 1                    # aopCfg: 1 (Enable AssistNow Autonomous)
+                    self._send_ubx_msg(0x06, 0x23, navx5_payload)
+                    print("[GPS] UBX CFG-NAVX5 (AssistNow Autonomous) erfolgreich gesendet.")
+                except Exception as e:
+                    print(f"[GPS] Fehler bei CFG-NAVX5: {e}")
+                
                 return True
             except serial.SerialException:
                 pass
