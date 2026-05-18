@@ -136,6 +136,104 @@ class DashboardUI:
         # Kleiner Pin in der Mitte
         pygame.draw.circle(self.screen, (80, 80, 90), (x, y), 3)
 
+    def draw_weather_icon(self, x, y, size, condition):
+        """
+        Zeichnet wunderschöne, maßgeschneiderte Wetter-Icons direkt als Vektorgrafik.
+        Löst das Problem fehlender Emoji-Unicode-Glyphen in Standard-Linux-Schriftarten.
+        """
+        cx = x + size // 2
+        cy = y + size // 2
+        
+        if condition == 'sun':
+            # Gelbe Sonne mit Sonnenstrahlen
+            r = int(size * 0.3)
+            pygame.draw.circle(self.screen, (255, 215, 0), (cx, cy), r)
+            for i in range(8):
+                angle = math.radians(i * 45)
+                x1 = cx + int(r * 1.3 * math.cos(angle))
+                y1 = cy + int(r * 1.3 * math.sin(angle))
+                x2 = cx + int(r * 1.8 * math.cos(angle))
+                y2 = cy + int(r * 1.8 * math.sin(angle))
+                pygame.draw.line(self.screen, (255, 215, 0), (x1, y1), (x2, y2), 2)
+                
+        elif condition == 'cloud':
+            # Schöne graue/weiße Wolke aus überlappenden Kreisen
+            r = int(size * 0.22)
+            c_color = (180, 185, 195)
+            pygame.draw.circle(self.screen, c_color, (cx - int(size * 0.25), cy + int(size * 0.08)), int(r * 0.85))
+            pygame.draw.circle(self.screen, c_color, (cx + int(size * 0.25), cy + int(size * 0.08)), int(r * 0.85))
+            pygame.draw.circle(self.screen, c_color, (cx, cy - int(size * 0.05)), r)
+            # Wolkenbasis abflachen
+            pygame.draw.rect(self.screen, c_color, (cx - int(size * 0.28), cy + int(size * 0.15) - int(r * 0.5), int(size * 0.56), int(r)), border_radius=3)
+
+        elif condition == 'cloud_sun':
+            # Sonne hinter Wolke
+            # 1. Sonne hinten rechts
+            sun_cx = cx + int(size * 0.16)
+            sun_cy = cy - int(size * 0.16)
+            sun_r = int(size * 0.22)
+            pygame.draw.circle(self.screen, (255, 210, 0), (sun_cx, sun_cy), sun_r)
+            for i in range(8):
+                angle = math.radians(i * 45)
+                x1 = sun_cx + int(sun_r * 1.2 * math.cos(angle))
+                y1 = sun_cy + int(sun_r * 1.2 * math.sin(angle))
+                x2 = sun_cx + int(sun_r * 1.6 * math.cos(angle))
+                y2 = sun_cy + int(sun_r * 1.6 * math.sin(angle))
+                pygame.draw.line(self.screen, (255, 210, 0), (x1, y1), (x2, y2), 1)
+                
+            # 2. Wolke vorne links
+            r = int(size * 0.18)
+            c_color = (200, 205, 215)
+            cloud_cx = cx - int(size * 0.12)
+            cloud_cy = cy + int(size * 0.08)
+            pygame.draw.circle(self.screen, c_color, (cloud_cx - int(size * 0.2), cloud_cy + int(size * 0.06)), int(r * 0.85))
+            pygame.draw.circle(self.screen, c_color, (cloud_cx + int(size * 0.2), cloud_cy + int(size * 0.06)), int(r * 0.85))
+            pygame.draw.circle(self.screen, c_color, (cloud_cx, cloud_cy - int(size * 0.05)), r)
+            pygame.draw.rect(self.screen, c_color, (cloud_cx - int(size * 0.22), cloud_cy + int(size * 0.12) - int(r * 0.5), int(size * 0.44), int(r)), border_radius=3)
+
+        elif condition == 'rain':
+            # Wolke mit Regen
+            self.draw_weather_icon(cx - size // 2, cy - size // 2 - int(size * 0.08), size, 'cloud')
+            # 3 Regentropfen
+            drop_color = (80, 150, 240)
+            ry = cy + int(size * 0.24)
+            pygame.draw.line(self.screen, drop_color, (cx - 5, ry), (cx - 7, ry + 5), 2)
+            pygame.draw.line(self.screen, drop_color, (cx + 1, ry), (cx - 1, ry + 5), 2)
+            pygame.draw.line(self.screen, drop_color, (cx + 7, ry), (cx + 5, ry + 5), 2)
+
+        elif condition == 'snow':
+            # Wolke mit Schneeflocken
+            self.draw_weather_icon(cx - size // 2, cy - size // 2 - int(size * 0.08), size, 'cloud')
+            # Schneeflocken als winzige weisse Punkte/Kreuze
+            snow_color = (240, 245, 255)
+            sy = cy + int(size * 0.24)
+            pygame.draw.circle(self.screen, snow_color, (cx - 5, sy + 2), 2)
+            pygame.draw.circle(self.screen, snow_color, (cx + 1, sy + 2), 2)
+            pygame.draw.circle(self.screen, snow_color, (cx + 7, sy + 2), 2)
+
+        elif condition == 'storm':
+            # Wolke mit Blitz
+            self.draw_weather_icon(cx - size // 2, cy - size // 2 - int(size * 0.08), size, 'cloud')
+            # Gelber Blitz
+            bolt_color = (255, 220, 0)
+            by = cy + int(size * 0.16)
+            pts = [
+                (cx + 2, by),
+                (cx - 3, by + 6),
+                (cx, by + 6),
+                (cx - 2, by + 12),
+                (cx + 4, by + 5),
+                (cx + 1, by + 5)
+            ]
+            pygame.draw.polygon(self.screen, bolt_color, pts)
+            
+        else:
+            # Fragezeichen bei Unbekannt
+            pygame.draw.circle(self.screen, self.COLOR_DARK_GRAY, (cx, cy), size // 3, width=1)
+            qm_surf = self.font_tag.render("?", True, self.COLOR_GRAY)
+            qm_rect = qm_surf.get_rect(center=(cx, cy))
+            self.screen.blit(qm_surf, qm_rect)
+
     def render(self, current_speed, speed_limit, sats, road_type, altitude, heading, is_simulated=True, has_fix=True, weather_temp=None, weather_desc=None):
         self.screen.fill(self.COLOR_BG)
         
@@ -155,17 +253,25 @@ class DashboardUI:
         date_surf = self.font_date.render(date_str, True, self.COLOR_GRAY)
         self.screen.blit(date_surf, (15 + time_surf.get_width() + 10, 16))
         
-        # 1.2 Wetter (Mitte)
+        # 1.2 Wetter (Mitte) - Zentriert gerendert aus Temperatur und Custom-Vektor-Icon
         if weather_temp is not None and weather_desc is not None:
-            weather_str = f"{weather_temp}°C {weather_desc}"
-            weather_color = self.COLOR_YELLOW
-        else:
-            weather_str = "--°C ?"
-            weather_color = self.COLOR_DARK_GRAY
+            temp_str = f"{weather_temp}°C"
+            temp_surf = self.font_weather.render(temp_str, True, self.COLOR_YELLOW)
             
-        weather_surf = self.font_weather.render(weather_str, True, weather_color)
-        weather_rect = weather_surf.get_rect(center=(self.width // 2 + 10, 22))
-        self.screen.blit(weather_surf, weather_rect)
+            icon_size = 24
+            gap = 8
+            total_w = temp_surf.get_width() + gap + icon_size
+            
+            start_x = (self.width // 2) - (total_w // 2) + 10 # Offset für zentrierten Gesamteindruck
+            self.screen.blit(temp_surf, (start_x, 11))
+            
+            # Custom Vector Wetter-Icon daneben zeichnen
+            self.draw_weather_icon(start_x + temp_surf.get_width() + gap, 10, icon_size, weather_desc)
+        else:
+            weather_str = "--°C"
+            weather_surf = self.font_weather.render(weather_str, True, self.COLOR_DARK_GRAY)
+            weather_rect = weather_surf.get_rect(center=(self.width // 2 + 10, 22))
+            self.screen.blit(weather_surf, weather_rect)
         
         # 1.3 Mode Tag (Rechts)
         if is_simulated:
