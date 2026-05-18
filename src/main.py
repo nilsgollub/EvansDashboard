@@ -181,7 +181,13 @@ def main():
                     
         # Prüfen, ob wir im Simulationsmodus sind (kein GPS-Update in den letzten 10s und Simulation aktiv)
         last_up = current_state.get('last_update', 0.0)
-        is_sim = SIMULATOR_ENABLED and (last_up == 0.0 or (time.time() - last_up) >= 10.0)
+        
+        # Ein Fix liegt vor, wenn das letzte Update weniger als 10 Sekunden alt ist
+        # und mindestens ein Latitude-Wert vorhanden ist
+        time_since_last_update = time.time() - last_up
+        has_fix = (last_up > 0.0 and time_since_last_update < 10.0 and current_state.get('lat') is not None)
+        
+        is_sim = SIMULATOR_ENABLED and not has_fix
         
         # Aktuellen State an UI übergeben
         ui.render(
@@ -191,7 +197,8 @@ def main():
             road_type=current_state['road_type'],
             altitude=current_state['altitude'],
             heading=current_state['heading'],
-            is_simulated=is_sim
+            is_simulated=is_sim,
+            has_fix=has_fix
         )
         
         # 30 Frames per Second

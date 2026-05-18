@@ -130,7 +130,7 @@ class DashboardUI:
         # Kleiner Pin in der Mitte
         pygame.draw.circle(self.screen, (80, 80, 90), (x, y), 3)
 
-    def render(self, current_speed, speed_limit, sats, road_type, altitude, heading, is_simulated=True):
+    def render(self, current_speed, speed_limit, sats, road_type, altitude, heading, is_simulated=True, has_fix=True):
         # 1. Hintergrund löschen
         self.screen.fill(self.COLOR_BG)
         
@@ -146,6 +146,13 @@ class DashboardUI:
             text_color = (240, 140, 40)
             status_text = "SIMULATOR"
             dot_color = (220, 100, 20)
+        elif not has_fix:
+            bg_color = (25, 30, 40)
+            border_color = (60, 120, 220)
+            text_color = (200, 220, 245)
+            status_text = "SUCHE GPS"
+            pulse = int(150 + 105 * abs(math.sin(time.time() * 3)))
+            dot_color = (40, 120, pulse)
         else:
             bg_color = (15, 35, 20)
             border_color = (40, 220, 40)
