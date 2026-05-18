@@ -13,7 +13,7 @@ current_state = {
     'road_type': "Warte auf GPS...",
     'sats': 0,
     'altitude': 0.0,
-    'heading': "N",
+    'heading': 0.0,
     'lat': None,
     'lon': None
 }

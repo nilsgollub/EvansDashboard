@@ -48,7 +48,12 @@ class GPSReader:
                         state_dict['speed'] = speed_kmh
                         state_dict['lat'] = msg.latitude
                         state_dict['lon'] = msg.longitude
-                        print(f"[GPS] RMC Update -> Speed: {speed_kmh:.1f} km/h, Pos: {msg.latitude:.4f}, {msg.longitude:.4f}")
+                        if hasattr(msg, 'track') and msg.track is not None:
+                            try:
+                                state_dict['heading'] = float(msg.track)
+                            except (ValueError, TypeError):
+                                pass
+                        print(f"[GPS] RMC Update -> Speed: {speed_kmh:.1f} km/h, Pos: {msg.latitude:.4f}, {msg.longitude:.4f}, Course: {state_dict.get('heading', 0.0)}°")
                     else:
                         print("[GPS] Suche nach Satelliten... (Noch kein GPS-Fix)")
                         
