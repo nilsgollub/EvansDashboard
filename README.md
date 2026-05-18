@@ -13,10 +13,11 @@ Dieses Projekt entstand für **Evan (geb. Juni 2021)**, um seine Faszination fü
     *   🟡 **Gelb:** Geringe Überschreitung (1-3 km/h über Limit).
     *   🔴 **Rot:** Überschreitung um mehr als 3 km/h.
 *   **Tempolimit-Anzeige:** Klassisches europäisches Verkehrsschild (weißer Kreis mit rotem Rand), das das aktuelle Tempolimit anzeigt.
-*   **Intelligente Straßenerkennung:** Übersetzung von OpenStreetMap-Typen in kindgerechte Begriffe (z.B. *Autobahn*, *Schnellstraße*, *Landstraße*, *Spielstraße*).
+*   **Intelligente Schweizer Straßenerkennung:** Übersetzung von OpenStreetMap-Typen in kindgerechte Schweizer Begriffe (z.B. *Autobahn*, *Autostrasse*, *Kantonsstrasse*, *Gemeindestrasse*, *Quartierstrasse*, *Begegnungszone*, *Feldweg*) unter Einhaltung des Schweizer Rechtschreibstandards (Verwendung von Doppel-"ss" statt "ß").
+*   **100% Offline-Modus (Schweiz):** Vollwertiges Offline-Fallback über eine lokale SQLite/Spatial-Datenbank (`switzerland_roads.db`), die mittels R-Tree-Indizierung extrem schnelle, ressourcenschonende Suchen der nächsten Straße und Tempolimits ohne Internetverbindung ermöglicht.
 *   **Zusatzanzeigen für kleine Forscher:**
     *   🛰️ **Satelliten-Verbindung:** Live-Anzahl der verbundenen Satelliten ("Sats: 8").
-    *   🏔️ **Höhenmesser & Himmelsrichtung:** Aktuelle Höhe über dem Meeresspiegel (ideal für hügelige Landschaften) und die Himmelsrichtung (N, S, O, W).
+    *   🏔️ **Höhenmesser & Himmelsrichtung:** Aktuelle Höhe über dem Meeresspiegel (ideal für die hügelige und bergige Schweizer Landschaft) und die Himmelsrichtung (N, S, O, W).
 *   **Volle Autonomie:** Startet extrem schnell und vollautomatisch direkt nach dem Booten (Headless, direkt in den Framebuffer).
 
 ---
@@ -119,29 +120,28 @@ exec ~/EvansDashboard/.venv/bin/python -u ~/EvansDashboard/src/main.py > ~/dashb
 
 ---
 
-## 📶 Netzwerk-Konfiguration (Unterwegs im Auto)
+## 📶 Netzwerk-Konfiguration (NetworkManager / Bookworm)
 
-Da das System live Geschwindigkeitsbegrenzungen über OpenStreetMap abfragt, benötigt der Raspberry Pi unterwegs Internetzugriff.
+Ab Raspberry Pi OS (Bookworm) wird standardmäßig **NetworkManager** anstelle von `wpa_supplicant` zur Netzwerksteuerung verwendet. Der automatische Wechsel (Failover) zwischen Heim-WLAN und Handy-Hotspot läuft damit vollautomatisch im Hintergrund.
 
-Das wird über ein **Dual-WiFi-Failover** realisiert:
-1. **Zuhause:** Der Pi verbindet sich mit dem Heim-WLAN, um Updates herunterzuladen oder Code per SSH zu bearbeiten.
-2. **Unterwegs:** Sobald der Pi außerhalb der Reichweite des Heim-WLANs ist, verbindet er sich automatisch mit dem mobilen Hotspot deines Handys (`NiniHotspot`).
+### WLAN-Verbindungen einrichten und verwalten
 
-Diese Priorisierung wird in der Datei `/etc/wpa_supplicant/wpa_supplicant.conf` wie folgt definiert:
+1. **Heim-WLAN verbinden:**
+   ```bash
+   sudo nmcli device wifi connect "Skynet" password "DeinSkynetPasswort"
+   ```
+2. **Handy-Hotspot verbinden (als Fallback für unterwegs):**
+   ```bash
+   sudo nmcli device wifi connect "NiniHotspot" password "DeinHotspotPasswort"
+   ```
 
-```text
-network={
-    ssid="DeinHeimWLAN"
-    psk="DeinHeimPasswort"
-    priority=10
-}
+### Wie funktioniert der automatische Wechsel?
+Der NetworkManager speichert beide Verbindungen als Profile unter `/etc/NetworkManager/system-connections/` ab. Er wählt automatisch das stärkste bzw. das gerade verfügbare Netzwerk aus. Wenn du das Haus verlässt und das Heim-WLAN `Skynet` abbricht, verbindet sich der Pi automatisch mit dem Handy-Hotspot `NiniHotspot` (sofern dieser am Smartphone aktiv ist).
 
-network={
-    ssid="NiniHotspot"
-    psk="HotspotPasswort"
-    priority=5
-}
-```
+### Nützliche nmcli-Befehle zur Diagnose:
+* **Verbindungsstatus anzeigen:** `nmcli connection show` (die aktive Verbindung ist grün markiert)
+* **Verfügbare WLANs scannen:** `nmcli device wifi list` (zeigt die SSID und die Empfangsstärke an)
+* **Gespeichertes Passwort im Klartext auslesen:** `sudo cat /etc/NetworkManager/system-connections/NiniHotspot.nmconnection`
 
 ---
 
