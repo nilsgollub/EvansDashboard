@@ -186,12 +186,24 @@ def get_speed_limit_online(lat, lon, radius=30):
 
 def get_speed_limit(lat, lon, radius=30):
     """
-    Prüft erst, ob die Offline-Datenbank existiert und nutzt diese.
+    Prüft erst, ob die Offline-Datenbank existiert und nutzt diese mit einem
+    progressiven Radius (30m -> 80m -> 150m) für maximale Ausfallsicherheit.
     Falls nicht, wird die Online Overpass API als Fallback abgefragt.
     """
     if os.path.exists(DB_PATH):
+        # Stufe 1: Präzise Nahbereichssuche (30m)
         speed, h_type = get_speed_limit_offline(lat, lon, radius)
-        if h_type != "Fehler":
+        if h_type != "Fehler" and h_type != "Unbekannt":
+            return speed, h_type
+            
+        # Stufe 2: Erweiterte Suche (80m) bei GPS-Drift oder Simulations-Abweichungen
+        speed, h_type = get_speed_limit_offline(lat, lon, 80)
+        if h_type != "Fehler" and h_type != "Unbekannt":
+            return speed, h_type
+            
+        # Stufe 3: Weitbereichs-Suche (150m) als letzter Rettungsanker
+        speed, h_type = get_speed_limit_offline(lat, lon, 150)
+        if h_type != "Fehler" and h_type != "Unbekannt":
             return speed, h_type
             
     # Online Fallback

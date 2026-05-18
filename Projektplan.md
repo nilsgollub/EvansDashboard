@@ -40,9 +40,11 @@ Das System läuft headless unter Raspberry Pi OS und startet das Dashboard autom
 
 Thread 1 (GPS-Erfassung): Liest kontinuierlich (mehrmals pro Sekunde) die NMEA-Daten ($GPRMC, $GPGGA) des U-BLOX NEO-7M über die serielle USB-Schnittstelle aus. Er extrahiert die aktuelle Geschwindigkeit über Grund, GPS-Koordinaten, Anzahl der Satelliten, Kurs und Höhe.
 
-Thread 2 (Tempolimit-Abfrage): Sobald ein gültiger GPS-Fix vorliegt, sendet dieser Thread alle 10 Sekunden die aktuellen Koordinaten an die OpenStreetMap Overpass API. Gesucht wird im Radius von 30 Metern nach der nächstgelegenen Straße. Extrahiert werden die Tags maxspeed (Tempolimit) und highway (Straßentyp).
+Thread 2 (Simulations-Fallschirm): Überwacht den Signal-Status. Sollte für mehr als 10 Sekunden kein GPS-Fix vorliegen, springt automatisch eine hochrealistische Bewegungssimulation entlang einer vordefinierten Marly-Route ein. Bei erneutem Hardware-Signalempfang erfolgt ein nahtloser Rückwechsel.
 
-Main Thread (UI-Rendering): Nutzt die Pillow (PIL) Bibliothek in Kombination mit Adafruit CircuitPython-Treibern, um die UI-Elemente direkt in den Framebuffer des SPI-Displays zu zeichnen (Hardware-beschleunigt).
+Thread 3 (Hybrid-Tempolimit-Abfrage): Fragt alle 10 Sekunden das Tempolimit und den Straßentyp ab. Die Abfrage geschieht primär und extrem schnell offline in einer indizierten, lokalen SQLite-Datenbank (`switzerland_roads.db`). Dabei wird ein progressiver Suchradius (15m -> 30m -> 60m) angewendet. Schlägt die Offline-Suche fehl, erfolgt ein automatisches Online-Fallback auf die Overpass API.
+
+Main Thread (UI-Rendering): Zeichnet die Benutzeroberfläche bei flüssigen 30 FPS in Pygame direkt auf das TFT-Display, inklusive eines schlagenden Herz-Statuspunkts für den Echtzeitbetrieb oder eines markanten Simulator-Tags bei Signalverlust.
 
 5. Benutzeroberfläche (Das Dashboard)
 
@@ -64,13 +66,12 @@ Straßentyp: Übersetzung der OSM-Daten in kindgerechte Begriffe (z.B. "Autobahn
 
 Höhenmesser & Kompass: Aktuelle Höhe über Meeresspiegel (in der Schweiz sehr dynamisch) und die Himmelsrichtung (N, S, O, W).
 
-6. Vernetzung
+6. Vernetzung und Offline-Autonomie
 
-Da kein Offline-Betrieb benötigt wird, setzt das System dauerhaft auf eine Online-Verbindung:
+Um maximale Zuverlässigkeit im Auto zu gewährleisten, setzt das System auf eine intelligente Hybrid-Strategie:
 
-Der Raspberry Pi Zero verbindet sich automatisch mit dem WLAN-Hotspot eines Android-Smartphones im Auto.
-
-Über diese Verbindung werden die API-Anfragen an OpenStreetMap gesendet.
+- **Offline-First:** Das gesamte Schweizer Straßennetz (über 600 MB) ist lokal indiziert und kann blitzschnell offline abgefragt werden. Für den Standardbetrieb ist keine Mobilfunkverbindung nötig.
+- **Online-Fallback & Hotspot:** Der Pi verbindet sich automatisch via NetworkManager mit dem Handy-Hotspot ("NiniHotspot"), um bei unvollständigen lokalen OSM-Daten auf die Live-Overpass-API zuzugreifen.
 
 7. Zukünftige Ausbaustufen (Phase 2)
 

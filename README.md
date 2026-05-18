@@ -14,7 +14,18 @@ Dieses Projekt entstand für **Evan (geb. Juni 2021)**, um seine Faszination fü
     *   🔴 **Rot:** Überschreitung um mehr als 3 km/h.
 *   **Tempolimit-Anzeige:** Klassisches europäisches Verkehrsschild (weißer Kreis mit rotem Rand), das das aktuelle Tempolimit anzeigt.
 *   **Intelligente Schweizer Straßenerkennung:** Übersetzung von OpenStreetMap-Typen in kindgerechte Schweizer Begriffe (z.B. *Autobahn*, *Autostrasse*, *Kantonsstrasse*, *Gemeindestrasse*, *Quartierstrasse*, *Begegnungszone*, *Feldweg*) unter Einhaltung des Schweizer Rechtschreibstandards (Verwendung von Doppel-"ss" statt "ß").
-*   **100% Offline-Modus (Schweiz):** Vollwertiges Offline-Fallback über eine lokale SQLite/Spatial-Datenbank (`switzerland_roads.db`), die mittels R-Tree-Indizierung extrem schnelle, ressourcenschonende Suchen der nächsten Straße und Tempolimits ohne Internetverbindung ermöglicht.
+*   **Progressive Hybrid-Offline-First Speed Engine (Schweiz):**
+    *   *Lokale Hochleistungs-Datenbank:* Nutzt eine indizierte SQLite-Datenbank (`switzerland_roads.db`) mit über 600 MB Schweizer Straßennetzdaten, um Tempolimits und Straßennamen in Millisekunden komplett offline zu ermitteln.
+    *   *Dynamische Progressive Radiussuche:* Sucht zuerst im nahen Umkreis (15m), und weitet die Suche bei Bedarf schrittweise aus (30m, 60m), um selbst bei komplexen Spuren, Abfahrten, Brücken oder kurzzeitigem GPS-Drift immer die präziseste Straße zu treffen.
+    *   *Intelligentes Online-Fallback:* Falls offline kein Treffer erzielt wird, schaltet das System nahtlos auf die Live-Overpass-API um und puffert das Ergebnis.
+*   **Automatischer GPS-Simulator (Marly-Route):**
+    *   Sollte beim Starten oder im Betrieb kein Satellitensignal verfügbar sein (z.B. in der Garage, im Tunnel oder im dichten Wald), schaltet das System nach 10 Sekunden automatisch in den **Simulationsmodus**.
+    *   Fährt eine realistische, dynamische Testroute durch Marly (Freiburg), simuliert realistische Beschleunigungs- und Bremsmanöver basierend auf den ermittelten Streckenlimits und aktualisiert Höhe sowie Himmelsrichtung.
+    *   Sobald wieder ein echtes GPS-Signal empfangen wird, wechselt das System vollautomatisch zurück in den Live-Betrieb.
+*   **High-Contrast Status-Tag ("LIVE GPS" vs "SIMULATOR"):**
+    *   Ein wunderschöner, abgerundeter Status-Badge in der rechten oberen Ecke signalisiert auf einen Blick den aktuellen Zustand.
+    *   *LIVE GPS (Grün):* Ein sanft pulsierender grüner Punkt, der wie ein Herzschlag schlägt, zeigt eine aktive, echte Satellitenverbindung.
+    *   *SIMULATOR (Orange):* Ein hochkontrastiges, oranges Badge signalisiert den Simulationsbetrieb.
 *   **Zusatzanzeigen für kleine Forscher:**
     *   🛰️ **Satelliten-Verbindung:** Live-Anzahl der verbundenen Satelliten ("Sats: 8").
     *   🏔️ **Höhenmesser & Himmelsrichtung:** Aktuelle Höhe über dem Meeresspiegel (ideal für die hügelige und bergige Schweizer Landschaft) und die Himmelsrichtung (N, S, O, W).
@@ -51,18 +62,20 @@ Die Applikation läuft unter **Raspberry Pi OS** (Debian Bookworm/Trixie) und is
 graph TD
     subgraph Threads
         A[GPS-Thread] -- NMEA Sätze --> C(Globaler Zustand)
-        B[Overpass-API-Thread] -- HTTP-Abfragen --> C
-        D[Haupt-Thread / UI] -- Rendert alle 30 FPS --> E[Pygame Screen / TFT]
+        B[Progressive Hybrid-API/Offline-Thread] -- SQLite / Overpass Fallback --> C
+        S[Simulations-Thread] -- Route & Physik-Sim bei Signalverlust --> C
+        D[Haupt-Thread / UI] -- Rendert alle 30 FPS mit Pulsing Tag --> E[Pygame Screen / TFT]
     end
     
     U[U-BLOX NEO-7M] -- Serial /dev/serial0 --> A
-    OSM[OpenStreetMap Overpass API] -- JSON over Hotspot WiFi --> B
+    OSM[SQLite DB / Overpass API] -- Lokale Abfragen / WiFi Backup --> B
     C -- Datenzufuhr --> D
 ```
 
 1.  **GPS-Thread (`src/gps_reader.py`):** Liest kontinuierlich mit `pyserial` und `pynmea2` die seriellen NMEA-Sätze (`$GPRMC` und `$GPGGA`) des GPS-Empfängers aus und aktualisiert Geschwindigkeit, Position, Höhe und Satellitenzahl.
-2.  **API-Thread (`src/osm_api.py`):** Sendet alle 10 Sekunden die aktuelle Position per HTTP-POST an die OpenStreetMap Overpass-API und fragt das Tempolimit (`maxspeed`) sowie den Straßentyp (`highway`) der Straße in einem Umkreis von 30 Metern ab.
-3.  **UI-Thread (`src/ui.py`):** Rendert das Dashboard in Pygame und zeichnet es mit hoher Performance direkt auf das Display.
+2.  **Progressiver Hybrid-API/Offline-Thread (`src/osm_api.py`):** Ermittelt alle 10 Sekunden das Tempolimit (`maxspeed`) und den Straßentyp (`highway`). Er sucht zuerst progressiv in der lokalen SQLite-Datenbank (`switzerland_roads.db`) mit Radien von 15m, 30m und 60m. Findet er dort keinen Eintrag, greift er über das Hotspot-WLAN transparent auf die Live-Overpass-API zu.
+3.  **Simulations-Thread (`src/main.py`):** Läuft im Hintergrund und simuliert eine fiktive Fahrt entlang einer Marly-Rundfahrtroute, sobald für mehr als 10 Sekunden kein echtes GPS-Signal detektiert wurde. Er rechnet realistische Trägheitsbeschleunigungen und Lenkwinkel ein.
+4.  **UI-Thread (`src/ui.py`):** Rendert das Dashboard in Pygame und zeichnet es mit hoher Performance direkt auf das Display, inklusive des schlagenden "LIVE GPS"-Herzens oder der statischen "SIMULATOR"-Anzeige.
 
 ---
 

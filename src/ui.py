@@ -1,5 +1,6 @@
 import pygame
 import math
+import time
 
 class DashboardUI:
     def __init__(self, width=480, height=320, fullscreen=False):
@@ -16,6 +17,7 @@ class DashboardUI:
         self.font_limit = pygame.font.SysFont('arial', 80, bold=True)
         self.font_info = pygame.font.SysFont('arial', 22)
         self.font_compass = pygame.font.SysFont('arial', 14, bold=True)
+        self.font_tag = pygame.font.SysFont('arial', 13, bold=True)
         
         # Farben (RGB)
         self.COLOR_BG = (15, 15, 20)      # Sehr dunkles Blau-Grau
@@ -128,9 +130,42 @@ class DashboardUI:
         # Kleiner Pin in der Mitte
         pygame.draw.circle(self.screen, (80, 80, 90), (x, y), 3)
 
-    def render(self, current_speed, speed_limit, sats, road_type, altitude, heading):
+    def render(self, current_speed, speed_limit, sats, road_type, altitude, heading, is_simulated=True):
         # 1. Hintergrund löschen
         self.screen.fill(self.COLOR_BG)
+        
+        # 1.5 Mode Tag (oben rechts)
+        tag_x = self.width - 130
+        tag_y = 20
+        tag_w = 105
+        tag_h = 26
+        
+        if is_simulated:
+            bg_color = (40, 25, 20)
+            border_color = (220, 100, 20)
+            text_color = (240, 140, 40)
+            status_text = "SIMULATOR"
+            dot_color = (220, 100, 20)
+        else:
+            bg_color = (15, 35, 20)
+            border_color = (40, 220, 40)
+            text_color = (245, 245, 245)
+            status_text = "LIVE GPS"
+            # Pulsierender Punkt
+            pulse = int(150 + 105 * abs(math.sin(time.time() * 3)))
+            dot_color = (40, pulse, 40)
+
+        rect = pygame.Rect(tag_x, tag_y, tag_w, tag_h)
+        pygame.draw.rect(self.screen, bg_color, rect, border_radius=13)
+        pygame.draw.rect(self.screen, border_color, rect, width=1, border_radius=13)
+        
+        # Zeichne den Status-Punkt
+        pygame.draw.circle(self.screen, dot_color, (tag_x + 15, tag_y + 13), 5)
+        
+        # Zeichne den Text
+        text_surf = self.font_tag.render(status_text, True, text_color)
+        text_rect = text_surf.get_rect(midleft=(tag_x + 28, tag_y + 13))
+        self.screen.blit(text_surf, text_rect)
         
         # 2. Tempolimit Schild (oben links)
         sign_radius = 70

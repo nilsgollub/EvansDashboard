@@ -48,6 +48,7 @@ class GPSReader:
                         state_dict['speed'] = speed_kmh
                         state_dict['lat'] = msg.latitude
                         state_dict['lon'] = msg.longitude
+                        state_dict['last_update'] = time.time()
                         if hasattr(msg, 'track') and msg.track is not None:
                             try:
                                 state_dict['heading'] = float(msg.track)
@@ -63,6 +64,7 @@ class GPSReader:
                     if msg.gps_qual > 0:
                         state_dict['sats'] = int(msg.num_sats)
                         state_dict['altitude'] = float(msg.altitude)
+                        state_dict['last_update'] = time.time()
                         print(f"[GPS] GGA Update -> Sats: {msg.num_sats}, Alt: {msg.altitude}m")
                         
             except pynmea2.ParseError:
