@@ -168,17 +168,14 @@ def fetch_weather_data():
                     temp = weather.get('temperature')
                     code = weather.get('weathercode')
                     
-                    # WMO Weather interpretation codes
-                    weather_desc = "Unbekannt"
-                    if code == 0: weather_desc = "Klar"
-                    elif code in [1, 2, 3]: weather_desc = "Wolkig"
-                    elif code in [45, 48]: weather_desc = "Nebel"
-                    elif code in [51, 53, 55, 56, 57]: weather_desc = "Niesel"
-                    elif code in [61, 63, 65, 66, 67]: weather_desc = "Regen"
-                    elif code in [71, 73, 75, 77]: weather_desc = "Schnee"
-                    elif code in [80, 81, 82]: weather_desc = "Schauer"
-                    elif code in [85, 86]: weather_desc = "Schneeschauer"
-                    elif code in [95, 96, 99]: weather_desc = "Gewitter"
+                    # WMO Weather interpretation codes mapped to widely supported Unicode symbols
+                    weather_desc = "?"
+                    if code == 0: weather_desc = "☀" # Klar
+                    elif code in [1, 2]: weather_desc = "⛅" # Heiter
+                    elif code in [3, 45, 48]: weather_desc = "☁" # Wolkig / Nebel
+                    elif code in [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82]: weather_desc = "☔" # Regen
+                    elif code in [71, 73, 75, 77, 85, 86]: weather_desc = "❄" # Schnee
+                    elif code in [95, 96, 99]: weather_desc = "⚡" # Gewitter
                     
                     if temp is not None:
                         current_state['weather_temp'] = temp

@@ -249,10 +249,10 @@ class DashboardUI:
         
         # 8. Wetter (zentriert unter Datum)
         if weather_temp is not None and weather_desc is not None:
-            weather_str = f"{weather_temp}°C | {weather_desc}"
+            weather_str = f"{weather_temp}°C   {weather_desc}"
             weather_color = self.COLOR_YELLOW
         else:
-            weather_str = "--°C | --"
+            weather_str = "--°C   ?"
             weather_color = self.COLOR_DARK_GRAY
             
         weather_surf = self.font_weather.render(weather_str, True, weather_color)
