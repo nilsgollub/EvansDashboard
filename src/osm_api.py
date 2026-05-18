@@ -1,3 +1,6 @@
+import os
+import sqlite3
+import math
 import requests
 import logging
 
@@ -6,10 +9,133 @@ logger = logging.getLogger(__name__)
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
-def get_speed_limit(lat, lon, radius=30):
+# Pfad zur Offline-Datenbank (liegt im Hauptverzeichnis des Projekts)
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "switzerland_roads.db")
+
+def calculate_distance_to_segment(p_lat, p_lon, lat1, lon1, lat2, lon2):
     """
-    Fragt die Overpass API nach dem Tempolimit im angegebenen Radius ab.
+    Berechnet die rechtwinklige Distanz (in Metern) von einem GPS-Punkt (p_lat, p_lon)
+    zu einem Liniensegment (lat1, lon1) -> (lat2, lon2).
+    Verwendet eine flache Projektion für extrem schnelle Berechnung auf kurzen Distanzen.
+    """
+    try:
+        # Breitengrad im Bogenmaß zur Längengrad-Skalierung
+        lat_avg_rad = math.radians((lat1 + lat2 + p_lat) / 3.0)
+        cos_lat = math.cos(lat_avg_rad)
+        
+        # Konvertiere in ein planares Koordinatensystem (in Grad)
+        # x = lon * cos_lat, y = lat
+        ax = lon1 * cos_lat
+        ay = lat1
+        bx = lon2 * cos_lat
+        by = lat2
+        px = p_lon * cos_lat
+        py = p_lat
+        
+        # Vektor AB
+        abx = bx - ax
+        aby = by - ay
+        
+        # Vektor AP
+        apx = px - ax
+        apy = py - ay
+        
+        # Länge von AB quadriert
+        ab_len_sq = abx * abx + aby * aby
+        
+        if ab_len_sq == 0:
+            # Segment ist ein einzelner Punkt
+            cx = ax
+            cy = ay
+        else:
+            # Projektionsfaktor t (geklemmt zwischen 0 und 1)
+            t = (apx * abx + apy * aby) / ab_len_sq
+            t = max(0.0, min(1.0, t))
+            
+            # Nächster Punkt C auf dem Segment
+            cx = ax + t * abx
+            cy = ay + t * aby
+        
+        # Abstand in Grad-Einheiten berechnen
+        dx = px - cx
+        dy = py - cy
+        
+        # In Meter umrechnen (1 Grad Breitengrad ist ca. 111.000 Meter)
+        dx_meters = dx * 111000.0
+        dy_meters = dy * 111000.0
+        
+        return math.sqrt(dx_meters * dx_meters + dy_meters * dy_meters)
+    except Exception as e:
+        logger.error(f"Fehler bei Distanzberechnung: {e}")
+        return float('inf')
+
+def get_speed_limit_offline(lat, lon, radius=30):
+    """
+    Fragt die lokale SQLite-Datenbank nach der nächsten Straße ab.
     Gibt ein Tuple zurück: (Tempolimit als int (oder None), Straßentyp als string)
+    """
+    if not os.path.exists(DB_PATH):
+        return None, None
+
+    try:
+        # Bounding-Box für Vorauswahl berechnen (beschleunigt die Suche massiv)
+        # 1 Grad Breitengrad ist ca. 111.000 Meter
+        lat_delta = radius / 111000.0
+        
+        # Längengrad-Delta unter Einbezug der Erdkrümmung
+        cos_lat = math.cos(math.radians(lat))
+        if cos_lat > 0:
+            lon_delta = radius / (111000.0 * cos_lat)
+        else:
+            lon_delta = radius / 111000.0
+            
+        min_lat = lat - lat_delta
+        max_lat = lat + lat_delta
+        min_lon = lon - lon_delta
+        max_lon = lon + lon_delta
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Schnellabfrage aller Segmente, die mit unserer Bounding-Box überlappen
+        cursor.execute("""
+            SELECT way_id, maxspeed, highway, name, lat1, lon1, lat2, lon2 
+            FROM road_segments 
+            WHERE max_lat >= ? AND min_lat <= ? AND max_lon >= ? AND min_lon <= ?
+        """, (min_lat, max_lat, min_lon, max_lon))
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        if not rows:
+            return None, "Unbekannt"
+            
+        min_dist = float('inf')
+        best_speed = None
+        highway_type = "Unbekannt"
+        
+        # Suche das mathematisch am nächsten gelegene Straßensegment
+        for row in rows:
+            way_id, maxspeed, highway, name, lat1, lon1, lat2, lon2 = row
+            dist = calculate_distance_to_segment(lat, lon, lat1, lon1, lat2, lon2)
+            if dist < min_dist and dist <= radius:
+                min_dist = dist
+                best_speed = maxspeed
+                highway_type = highway
+                
+        # Wenn kein Segment nahe genug war
+        if min_dist > radius:
+            return None, "Unbekannt"
+            
+        return best_speed, highway_type
+        
+    except sqlite3.Error as e:
+        logger.error(f"Fehler bei Offline-Datenbankabfrage: {e}")
+        return None, "Fehler"
+
+def get_speed_limit_online(lat, lon, radius=30):
+    """
+    Fallbacks: Fragt die Overpass API nach dem Tempolimit im angegebenen Radius ab.
     """
     query = f"""
     [out:json];
@@ -23,7 +149,6 @@ def get_speed_limit(lat, lon, radius=30):
     }
     
     try:
-        # POST Request ist bei Overpass oft stabiler und unterstützt den User-Agent besser
         response = requests.post(OVERPASS_URL, data={'data': query}, headers=headers, timeout=5)
         response.raise_for_status()
         data = response.json()
@@ -32,7 +157,6 @@ def get_speed_limit(lat, lon, radius=30):
         if not elements:
             return None, "Unbekannt"
             
-        # Durchsuche die gefundenen Wege nach einem Tempolimit
         best_speed = None
         highway_type = "Unbekannt"
         
@@ -42,9 +166,8 @@ def get_speed_limit(lat, lon, radius=30):
                 try:
                     speed_str = tags['maxspeed']
                     if speed_str == 'none':
-                        best_speed = 130 # Oder was in CH üblich ist
+                        best_speed = 120  # Schweizer Autobahn-Standard
                     else:
-                        # Extrahiere nur Zahlen (falls "50 mph" o.ä.)
                         best_speed = int(''.join(filter(str.isdigit, speed_str)))
                 except ValueError:
                     pass
@@ -61,8 +184,22 @@ def get_speed_limit(lat, lon, radius=30):
         logger.error(f"Fehler bei der Overpass API Abfrage: {e}")
         return None, "Fehler"
 
+def get_speed_limit(lat, lon, radius=30):
+    """
+    Prüft erst, ob die Offline-Datenbank existiert und nutzt diese.
+    Falls nicht, wird die Online Overpass API als Fallback abgefragt.
+    """
+    if os.path.exists(DB_PATH):
+        speed, h_type = get_speed_limit_offline(lat, lon, radius)
+        if h_type != "Fehler":
+            return speed, h_type
+            
+    # Online Fallback
+    return get_speed_limit_online(lat, lon, radius)
+
 if __name__ == "__main__":
     # Test-Abfrage (Zürich, Nähe Hauptbahnhof)
-    print("Teste Overpass API...")
+    print("=== EvansDashboard Speed-Engine Test ===")
+    print(f"Offline-DB vorhanden: {os.path.exists(DB_PATH)}")
     limit, r_type = get_speed_limit(47.3769, 8.5417)
-    print(f"Limit: {limit} km/h, Typ: {r_type}")
+    print(f"Ergebnis -> Limit: {limit} km/h, Typ: {r_type}")

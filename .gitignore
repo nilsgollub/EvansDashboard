@@ -53,3 +53,8 @@ Thumbs.db
 # Project logs
 *.log
 dashboard.log
+
+# OSM Offline Data
+*.osm.pbf
+*.db
+
