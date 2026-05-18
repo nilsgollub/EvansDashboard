@@ -20,8 +20,8 @@ current_state = {
     'sats': 0,
     'altitude': 0.0,
     'heading': 0.0,
-    'lat': None,
-    'lon': None,
+    'lat': 46.779,  # Startwert Marly, damit Wetter sofort geladen wird
+    'lon': 7.152,
     'last_update': 0.0,  # Timestamp des letzten echten GPS-Updates
     'weather_temp': None,
     'weather_desc': None

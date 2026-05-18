@@ -123,9 +123,19 @@ class GPSReader:
                 # GGA (Global Positioning System Fix Data) liefert uns Satelliten & Höhe
                 elif line.startswith('$GPGGA') or line.startswith('$GNGGA'):
                     msg = pynmea2.parse(line)
+                    
+                    # Satelliten werden vom Modul auch dann gemeldet, wenn noch kein voller Fix besteht
+                    try:
+                        if msg.num_sats:
+                            state_dict['sats'] = int(msg.num_sats)
+                    except (ValueError, TypeError):
+                        pass
+                        
                     if msg.gps_qual > 0:
-                        state_dict['sats'] = int(msg.num_sats)
-                        state_dict['altitude'] = float(msg.altitude)
+                        try:
+                            state_dict['altitude'] = float(msg.altitude)
+                        except (ValueError, TypeError):
+                            pass
                         state_dict['last_update'] = time.time()
                         print(f"[GPS] GGA Update -> Sats: {msg.num_sats}, Alt: {msg.altitude}m")
                         
