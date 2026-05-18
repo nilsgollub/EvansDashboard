@@ -38,13 +38,15 @@ Das Gehäuse sollte abgerundete Ecken haben und robust genug sein, um Kinderhän
 
 Das System läuft headless unter Raspberry Pi OS und startet das Dashboard automatisch beim Booten. Die Software wird in Python geschrieben und nutzt Multithreading für einen flüssigen Betrieb.
 
-Thread 1 (GPS-Erfassung): Liest kontinuierlich (mehrmals pro Sekunde) die NMEA-Daten ($GPRMC, $GPGGA) des U-BLOX NEO-7M über die serielle USB-Schnittstelle aus. Er extrahiert die aktuelle Geschwindigkeit über Grund, GPS-Koordinaten, Anzahl der Satelliten, Kurs und Höhe.
+Thread 1 (GPS-Erfassung): Liest kontinuierlich (mehrmals pro Sekunde) die NMEA-Daten ($GPRMC, $GPGGA) des U-BLOX NEO-7M über die serielle USB-Schnittstelle aus. Bei jedem Start wird das Modul durch proprietäre binäre UBX-Befehle hochoptimiert konfiguriert (Automotive Dynamic Mode, GLONASS an / SBAS aus, AssistNow Autonomous AOP für schnellste Fix-Zeiten und permanenter NVRAM Save). Er extrahiert die aktuelle Geschwindigkeit über Grund, GPS-Koordinaten, Anzahl der Satelliten, Kurs und Höhe.
 
 Thread 2 (Simulations-Fallschirm): Überwacht den Signal-Status. Sollte für mehr als 10 Sekunden kein GPS-Fix vorliegen, springt automatisch eine hochrealistische Bewegungssimulation entlang einer vordefinierten Marly-Route ein. Bei erneutem Hardware-Signalempfang erfolgt ein nahtloser Rückwechsel.
 
 Thread 3 (Hybrid-Tempolimit-Abfrage): Fragt alle 10 Sekunden das Tempolimit und den Straßentyp ab. Die Abfrage geschieht primär und extrem schnell offline in einer indizierten, lokalen SQLite-Datenbank (`switzerland_roads.db`). Dabei wird ein progressiver Suchradius (15m -> 30m -> 60m) angewendet. Schlägt die Offline-Suche fehl, erfolgt ein automatisches Online-Fallback auf die Overpass API.
 
-Main Thread (UI-Rendering): Zeichnet die Benutzeroberfläche bei flüssigen 30 FPS in Pygame direkt auf das TFT-Display, inklusive eines schlagenden Herz-Statuspunkts für den Echtzeitbetrieb oder eines markanten Simulator-Tags bei Signalverlust.
+Thread 4 (Wetter-Abfrage): Holt alle 15 Minuten über die kostenlose Open-Meteo API asynchron und passiv das lokale Wetter ab, basierend auf den aktuellen GPS-Koordinaten. Falls keine Internetverbindung besteht, fällt die Anzeige nahtlos in einen `--` Modus zurück.
+
+Main Thread (UI-Rendering): Zeichnet die Benutzeroberfläche bei flüssigen 30 FPS in Pygame direkt auf das TFT-Display, inklusive eines pulsierenden blauen "SUCHE GPS"-Status, eines grünen "LIVE GPS"-Herzens für den Echtzeitbetrieb oder eines markanten orangefarbenen Simulator-Tags bei Signalverlust.
 
 5. Benutzeroberfläche (Das Dashboard)
 
@@ -62,9 +64,11 @@ Zusatzinformationen für Evan:
 
 Satelliten-Kontakt: "Sats: 8" (gibt das Gefühl einer Weltraum-Verbindung).
 
-Straßentyp: Übersetzung der OSM-Daten in kindgerechte Begriffe (z.B. "Autobahn", "Landstraße", "Dorfstraße").
+Straßentyp: Übersetzung der OSM-Daten in kindgerechte Begriffe (z.B. "Autobahn", "Kantonsstrasse", "Gemeindestrasse").
 
 Höhenmesser & Kompass: Aktuelle Höhe über Meeresspiegel (in der Schweiz sehr dynamisch) und die Himmelsrichtung (N, S, O, W).
+
+Uhrzeit, Datum & Wetter: Zentrierte, klare Zeitanzeige mit Systemuhr und dynamischen Wetter-Symbolen (z.B. ☀️, ⛅, 🌧️) via Open-Meteo.
 
 6. Vernetzung und Offline-Autonomie
 

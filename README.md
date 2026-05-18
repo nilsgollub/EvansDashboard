@@ -22,10 +22,14 @@ Dieses Projekt entstand für **Evan (geb. Juni 2021)**, um seine Faszination fü
     *   Sollte beim Starten oder im Betrieb kein Satellitensignal verfügbar sein (z.B. in der Garage, im Tunnel oder im dichten Wald), schaltet das System nach 10 Sekunden automatisch in den **Simulationsmodus**.
     *   Fährt eine realistische, dynamische Testroute durch Marly (Freiburg), simuliert realistische Beschleunigungs- und Bremsmanöver basierend auf den ermittelten Streckenlimits und aktualisiert Höhe sowie Himmelsrichtung.
     *   Sobald wieder ein echtes GPS-Signal empfangen wird, wechselt das System vollautomatisch zurück in den Live-Betrieb.
-*   **High-Contrast Status-Tag ("LIVE GPS" vs "SIMULATOR"):**
+*   **High-Contrast Status-Tag ("SUCHE GPS" / "LIVE GPS" / "SIMULATOR"):**
     *   Ein wunderschöner, abgerundeter Status-Badge in der rechten oberen Ecke signalisiert auf einen Blick den aktuellen Zustand.
+    *   *SUCHE GPS (Blau):* Ein pulsierender blauer Punkt zeigt an, dass nach einem validen Satelliten-Fix gesucht wird.
     *   *LIVE GPS (Grün):* Ein sanft pulsierender grüner Punkt, der wie ein Herzschlag schlägt, zeigt eine aktive, echte Satellitenverbindung.
     *   *SIMULATOR (Orange):* Ein hochkontrastiges, oranges Badge signalisiert den Simulationsbetrieb.
+*   **Wetter, Uhrzeit & Datum (Open-Meteo):**
+    *   Die große, gut ablesbare System-Uhrzeit zentriert das Dashboard.
+    *   Automatischer Abruf lokaler Live-Wetterdaten über die kostenlose Open-Meteo-API (Temperatur und Unicode-Wettericons wie ☀️, ☁️, ☔) basierend auf den aktuellen GPS-Koordinaten. Vollständiges Offline-Fallback vorhanden.
 *   **Zusatzanzeigen für kleine Forscher:**
     *   🛰️ **Satelliten-Verbindung:** Live-Anzahl der verbundenen Satelliten ("Sats: 8").
     *   🏔️ **Höhenmesser & Himmelsrichtung:** Aktuelle Höhe über dem Meeresspiegel (ideal für die hügelige und bergige Schweizer Landschaft) und die Himmelsrichtung (N, S, O, W).
@@ -72,7 +76,7 @@ graph TD
     C -- Datenzufuhr --> D
 ```
 
-1.  **GPS-Thread (`src/gps_reader.py`):** Liest kontinuierlich mit `pyserial` und `pynmea2` die seriellen NMEA-Sätze (`$GPRMC` und `$GPGGA`) des GPS-Empfängers aus und aktualisiert Geschwindigkeit, Position, Höhe und Satellitenzahl.
+1.  **GPS-Thread (`src/gps_reader.py`):** Liest kontinuierlich mit `pyserial` und `pynmea2` die seriellen NMEA-Sätze (`$GPRMC` und `$GPGGA`) des GPS-Empfängers aus. Bei der Initialisierung werden proprietäre binäre UBX-Befehle (Automotive-Modus, GLONASS aktiv, AssistNow Autonomous AOP) direkt an den Chip geschickt und im NVRAM gespeichert, um den "Kaltstart" zu extrem zu beschleunigen. Er aktualisiert Geschwindigkeit, Position, Höhe und Satellitenzahl.
 2.  **Progressiver Hybrid-API/Offline-Thread (`src/osm_api.py`):** Ermittelt alle 10 Sekunden das Tempolimit (`maxspeed`) und den Straßentyp (`highway`). Er sucht zuerst progressiv in der lokalen SQLite-Datenbank (`switzerland_roads.db`) mit Radien von 15m, 30m und 60m. Findet er dort keinen Eintrag, greift er über das Hotspot-WLAN transparent auf die Live-Overpass-API zu.
 3.  **Simulations-Thread (`src/main.py`):** Läuft im Hintergrund und simuliert eine fiktive Fahrt entlang einer Marly-Rundfahrtroute, sobald für mehr als 10 Sekunden kein echtes GPS-Signal detektiert wurde. Er rechnet realistische Trägheitsbeschleunigungen und Lenkwinkel ein.
 4.  **UI-Thread (`src/ui.py`):** Rendert das Dashboard in Pygame und zeichnet es mit hoher Performance direkt auf das Display, inklusive des schlagenden "LIVE GPS"-Herzens oder der statischen "SIMULATOR"-Anzeige.
@@ -126,9 +130,12 @@ sudo systemctl start evans-dashboard.service
 
 Der Service startet einen schlanken X-Server (`startx`), welcher wiederum über die Datei `~/.xinitrc` direkt unsere Python-Applikation im Kiosk-Modus lädt.
 
-Die Datei `~/.xinitrc` in deinem Home-Verzeichnis (`/home/nilsgollub/.xinitrc`) sollte wie folgt aussehen:
+Die Datei `~/.xinitrc` in deinem Home-Verzeichnis (`/home/nilsgollub/.xinitrc`) sollte wie folgt aussehen, um bei jedem Neustart automatisch das neueste Update von GitHub zu ziehen:
 ```bash
-exec ~/EvansDashboard/.venv/bin/python -u ~/EvansDashboard/src/main.py > ~/dashboard.log 2>&1
+cd ~/EvansDashboard
+git fetch --all >> ~/git_pull.log 2>&1
+git reset --hard origin/master >> ~/git_pull.log 2>&1
+exec ~/.venv/bin/python -u src/main.py > ~/dashboard.log 2>&1
 ```
 
 ---
