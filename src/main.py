@@ -156,6 +156,7 @@ def fetch_overpass_data():
 def fetch_weather_data():
     """Holt das aktuelle Wetter von Open-Meteo (kostenlos, kein API Key) für die aktuelle Position"""
     while True:
+        success = False
         lat, lon = current_state.get('lat'), current_state.get('lon')
         if lat is not None and lon is not None:
             try:
@@ -170,22 +171,27 @@ def fetch_weather_data():
                     
                     # WMO Weather interpretation codes mapped to widely supported Unicode symbols
                     weather_desc = "?"
-                    if code == 0: weather_desc = "☀" # Klar
+                    if code == 0: weather_desc = "☀️" # Klar
                     elif code in [1, 2]: weather_desc = "⛅" # Heiter
-                    elif code in [3, 45, 48]: weather_desc = "☁" # Wolkig / Nebel
+                    elif code in [3, 45, 48]: weather_desc = "☁️" # Wolkig / Nebel
                     elif code in [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82]: weather_desc = "☔" # Regen
-                    elif code in [71, 73, 75, 77, 85, 86]: weather_desc = "❄" # Schnee
+                    elif code in [71, 73, 75, 77, 85, 86]: weather_desc = "❄️" # Schnee
                     elif code in [95, 96, 99]: weather_desc = "⚡" # Gewitter
                     
                     if temp is not None:
                         current_state['weather_temp'] = temp
                         current_state['weather_desc'] = weather_desc
                         print(f"[WEATHER] Wetter geupdatet: {temp}°C | {weather_desc}")
+                        success = True
             except Exception as e:
                 print(f"[WEATHER] Fehler beim Abrufen des Wetters: {e}")
                 
-        # Nur alle 15 Minuten abfragen
-        time.sleep(15 * 60)
+        if success:
+            # Bei Erfolg 15 Minuten warten
+            time.sleep(15 * 60)
+        else:
+            # Bei Fehler oder fehlendem GPS alle 10 Sekunden neu versuchen
+            time.sleep(10)
 
 def main():
     # GPS Thread starten

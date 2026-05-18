@@ -14,16 +14,16 @@ class DashboardUI:
         pygame.display.set_caption("Evans Co-Pilot Dashboard")
         
         # Initialisiere Fonts
-        self.font_speed = pygame.font.SysFont('arial', 140, bold=True)
+        self.font_speed = pygame.font.SysFont('arial', 150, bold=True)
         self.font_limit = pygame.font.SysFont('arial', 80, bold=True)
         self.font_info = pygame.font.SysFont('arial', 22)
         self.font_compass = pygame.font.SysFont('arial', 14, bold=True)
         self.font_tag = pygame.font.SysFont('arial', 13, bold=True)
         
-        # Neue Fonts für Zeit, Datum und Wetter
-        self.font_time = pygame.font.SysFont('arial', 48, bold=True)
+        # Fonts für Zeit, Datum und Wetter (Top Bar)
+        self.font_time = pygame.font.SysFont('arial', 28, bold=True)
         self.font_date = pygame.font.SysFont('arial', 18)
-        self.font_weather = pygame.font.SysFont('arial', 20, bold=True)
+        self.font_weather = pygame.font.SysFont('arial', 22, bold=True)
         
         # Farben (RGB)
         self.COLOR_BG = (15, 15, 20)      # Sehr dunkles Blau-Grau
@@ -137,15 +137,37 @@ class DashboardUI:
         pygame.draw.circle(self.screen, (80, 80, 90), (x, y), 3)
 
     def render(self, current_speed, speed_limit, sats, road_type, altitude, heading, is_simulated=True, has_fix=True, weather_temp=None, weather_desc=None):
-        # 1. Hintergrund löschen
         self.screen.fill(self.COLOR_BG)
         
-        # 1.5 Mode Tag (oben rechts)
-        tag_x = self.width - 130
-        tag_y = 20
-        tag_w = 105
-        tag_h = 26
+        # --- 1. TOP BAR (Höhe: 45px) ---
+        # Hintergrund und Trennlinie
+        pygame.draw.rect(self.screen, (20, 20, 25), (0, 0, self.width, 45))
+        pygame.draw.line(self.screen, (40, 40, 50), (0, 45), (self.width, 45), 2)
         
+        # 1.1 Uhrzeit & Datum (Links)
+        now = datetime.now()
+        time_str = now.strftime("%H:%M")
+        date_str = now.strftime("%d.%m.%Y")
+        
+        time_surf = self.font_time.render(time_str, True, self.COLOR_WHITE)
+        self.screen.blit(time_surf, (15, 8))
+        
+        date_surf = self.font_date.render(date_str, True, self.COLOR_GRAY)
+        self.screen.blit(date_surf, (15 + time_surf.get_width() + 10, 16))
+        
+        # 1.2 Wetter (Mitte)
+        if weather_temp is not None and weather_desc is not None:
+            weather_str = f"{weather_temp}°C {weather_desc}"
+            weather_color = self.COLOR_YELLOW
+        else:
+            weather_str = "--°C ?"
+            weather_color = self.COLOR_DARK_GRAY
+            
+        weather_surf = self.font_weather.render(weather_str, True, weather_color)
+        weather_rect = weather_surf.get_rect(center=(self.width // 2 + 10, 22))
+        self.screen.blit(weather_surf, weather_rect)
+        
+        # 1.3 Mode Tag (Rechts)
         if is_simulated:
             bg_color = (40, 25, 20)
             border_color = (220, 100, 20)
@@ -164,35 +186,30 @@ class DashboardUI:
             border_color = (40, 220, 40)
             text_color = (245, 245, 245)
             status_text = "LIVE GPS"
-            # Pulsierender Punkt
             pulse = int(150 + 105 * abs(math.sin(time.time() * 3)))
             dot_color = (40, pulse, 40)
 
+        tag_w = 105
+        tag_h = 26
+        tag_x = self.width - tag_w - 15
+        tag_y = 9
         rect = pygame.Rect(tag_x, tag_y, tag_w, tag_h)
         pygame.draw.rect(self.screen, bg_color, rect, border_radius=13)
         pygame.draw.rect(self.screen, border_color, rect, width=1, border_radius=13)
-        
-        # Zeichne den Status-Punkt
         pygame.draw.circle(self.screen, dot_color, (tag_x + 15, tag_y + 13), 5)
         
-        # Zeichne den Text
         text_surf = self.font_tag.render(status_text, True, text_color)
         text_rect = text_surf.get_rect(midleft=(tag_x + 28, tag_y + 13))
         self.screen.blit(text_surf, text_rect)
         
-        # 2. Tempolimit Schild (oben links)
-        sign_radius = 70
-        sign_x = sign_radius + 25
-        sign_y = sign_radius + 20
+        # --- 2. MAIN CENTER (Y: 45 bis 260) ---
+        # 2.1 Tempolimit Schild (Linke Spalte)
+        sign_radius = 65
+        sign_x = 90
+        sign_y = 155
         self.draw_speed_limit_sign(sign_x, sign_y, sign_radius, speed_limit)
         
-        # 3. Grafischer Kompass (unten links, perfekt unter dem Tempolimit-Schild platziert)
-        compass_radius = 45
-        compass_x = sign_x
-        compass_y = 250
-        self.draw_compass(compass_x, compass_y, compass_radius, heading)
-        
-        # 4. Aktuelle Geschwindigkeit (rechts groß)
+        # 2.2 Aktuelle Geschwindigkeit (Rechte Spalte)
         speed_color = self.COLOR_WHITE
         if speed_limit is not None:
             if current_speed > speed_limit + 3:
@@ -200,64 +217,45 @@ class DashboardUI:
             elif current_speed <= speed_limit:
                 speed_color = self.COLOR_GREEN
             else:
-                speed_color = self.COLOR_YELLOW # Geringe Toleranz (1-3 km/h drüber)
+                speed_color = self.COLOR_YELLOW
                 
         speed_text = f"{int(current_speed)}"
         speed_surface = self.font_speed.render(speed_text, True, speed_color)
-        speed_rect = speed_surface.get_rect(midright=(self.width - 40, self.height // 2 - 10))
+        speed_rect = speed_surface.get_rect(midright=(self.width - 30, 145))
         self.screen.blit(speed_surface, speed_rect)
         
-        # "km/h" Anzeige direkt unter/neben der Geschwindigkeit
+        # "km/h" Anzeige rechtsbündig unter der Geschwindigkeit
         kmh_surface = self.font_info.render("km/h", True, self.COLOR_GRAY)
-        kmh_rect = kmh_surface.get_rect(topright=(self.width - 40, speed_rect.bottom - 15))
+        kmh_rect = kmh_surface.get_rect(topright=(self.width - 35, speed_rect.bottom - 25))
         self.screen.blit(kmh_surface, kmh_rect)
         
-        # 5. Zusatzinfos (Mitte unten, neben dem Kompass platziert)
-        info_x = 165
-        info_y_start = 205
+        # --- 3. BOTTOM BAR (Y: 260 bis 320) ---
+        # Trennlinie
+        pygame.draw.line(self.screen, (40, 40, 50), (0, 260), (self.width, 260), 2)
         
-        # Satelliten mit Farbe (Grün = gut, Rot = schlecht)
-        sat_color = self.COLOR_GREEN if sats >= 4 else self.COLOR_RED
-        sats_surface = self.font_info.render(f"Sats: {sats}", True, sat_color)
-        self.screen.blit(sats_surface, (info_x, info_y_start))
+        # 3.1 Kompass (Links)
+        compass_radius = 22
+        compass_x = 40
+        compass_y = 290
+        self.draw_compass(compass_x, compass_y, compass_radius, heading)
         
-        # Strasse mit Schweizer Übersetzung
+        # 3.2 Himmelsrichtung & Höhe (Neben Kompass)
+        heading_text = self.get_cardinal_direction(heading)
+        alt_surface = self.font_info.render(f"{heading_text} | {int(altitude)}m", True, self.COLOR_GRAY)
+        self.screen.blit(alt_surface, (75, 278))
+        
+        # 3.3 Strassentyp (Zentriert)
         road_key = str(road_type).lower()
         translated_road = self.ROAD_TYPE_TRANSLATIONS.get(road_key, road_type)
-        road_surface = self.font_info.render(f"Strasse: {translated_road}", True, self.COLOR_GRAY)
-        self.screen.blit(road_surface, (info_x, info_y_start + 28))
+        road_surface = self.font_info.render(translated_road, True, self.COLOR_WHITE)
+        road_rect = road_surface.get_rect(center=(self.width // 2 + 10, 290))
+        self.screen.blit(road_surface, road_rect)
         
-        # Höhe und Himmelsrichtungstext
-        heading_text = self.get_cardinal_direction(heading)
-        alt_surface = self.font_info.render(f"Höhe: {int(altitude)}m | {heading_text} ({int(heading)}°)", True, self.COLOR_GRAY)
-        self.screen.blit(alt_surface, (info_x, info_y_start + 56))
+        # 3.4 Satelliten (Rechts)
+        sat_color = self.COLOR_GREEN if sats >= 4 else self.COLOR_RED
+        sats_surface = self.font_info.render(f"Sats: {sats}", True, sat_color)
+        sats_rect = sats_surface.get_rect(midright=(self.width - 20, 290))
+        self.screen.blit(sats_surface, sats_rect)
         
-        # 7. Uhrzeit und Datum (Oben Mitte)
-        now = datetime.now()
-        time_str = now.strftime("%H:%M")
-        date_str = now.strftime("%d.%m.%Y")
-        
-        # Uhrzeit rendern (zentriert)
-        time_surf = self.font_time.render(time_str, True, self.COLOR_WHITE)
-        time_x = (self.width // 2) - (time_surf.get_width() // 2)
-        self.screen.blit(time_surf, (time_x, 20))
-        
-        # Datum rendern (zentriert unter Uhrzeit)
-        date_surf = self.font_date.render(date_str, True, self.COLOR_GRAY)
-        date_x = (self.width // 2) - (date_surf.get_width() // 2)
-        self.screen.blit(date_surf, (date_x, 75))
-        
-        # 8. Wetter (zentriert unter Datum)
-        if weather_temp is not None and weather_desc is not None:
-            weather_str = f"{weather_temp}°C   {weather_desc}"
-            weather_color = self.COLOR_YELLOW
-        else:
-            weather_str = "--°C   ?"
-            weather_color = self.COLOR_DARK_GRAY
-            
-        weather_surf = self.font_weather.render(weather_str, True, weather_color)
-        weather_x = (self.width // 2) - (weather_surf.get_width() // 2)
-        self.screen.blit(weather_surf, (weather_x, 100))
-        
-        # 9. Display aktualisieren
+        # 4. Display aktualisieren
         pygame.display.flip()
