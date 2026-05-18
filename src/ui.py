@@ -26,6 +26,27 @@ class DashboardUI:
         self.COLOR_DARK_GRAY = (60, 60, 70)
         self.COLOR_YELLOW = (240, 200, 40)
         
+        # Schweizer Strassentyp-Übersetzungen (mit "ss" statt "ß")
+        self.ROAD_TYPE_TRANSLATIONS = {
+            'motorway': 'Autobahn',
+            'motorway_link': 'Autobahn-Anschluss',
+            'trunk': 'Autostrasse',
+            'trunk_link': 'Autostrasse-Anschluss',
+            'primary': 'Kantonsstrasse',
+            'primary_link': 'Kantonsstrasse',
+            'secondary': 'Kantonsstrasse',
+            'secondary_link': 'Kantonsstrasse',
+            'tertiary': 'Gemeindestrasse',
+            'tertiary_link': 'Gemeindestrasse',
+            'unclassified': 'Gemeindestrasse',
+            'residential': 'Quartierstrasse',
+            'living_street': 'Begegnungszone',
+            'service': 'Service-Strasse',
+            'track': 'Feldweg',
+            'unbekannt': 'Unbekannt',
+            'fehler': 'Fehler'
+        }
+        
     def draw_speed_limit_sign(self, x, y, radius, limit):
         # Weißer Kreis
         pygame.draw.circle(self.screen, self.COLOR_WHITE, (x, y), radius)
@@ -152,8 +173,10 @@ class DashboardUI:
         sats_surface = self.font_info.render(f"Sats: {sats}", True, sat_color)
         self.screen.blit(sats_surface, (info_x, info_y_start))
         
-        # Straße
-        road_surface = self.font_info.render(f"Straße: {road_type}", True, self.COLOR_GRAY)
+        # Strasse mit Schweizer Übersetzung
+        road_key = str(road_type).lower()
+        translated_road = self.ROAD_TYPE_TRANSLATIONS.get(road_key, road_type)
+        road_surface = self.font_info.render(f"Strasse: {translated_road}", True, self.COLOR_GRAY)
         self.screen.blit(road_surface, (info_x, info_y_start + 28))
         
         # Höhe und Himmelsrichtungstext
