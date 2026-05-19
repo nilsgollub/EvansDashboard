@@ -144,6 +144,52 @@ sudo systemctl daemon-reload
 sudo systemctl enable evans-dashboard.service
 
 # ==============================================================================
+# WLAN / Hotspot-Konfiguration
+# ==============================================================================
+echo -e "${BLUE}================================================================${NC}"
+echo -e "${GREEN}             Zusätzlichen WLAN-Hotspot einrichten                ${NC}"
+echo -e "${BLUE}================================================================${NC}"
+echo "Du kannst hier einen mobilen Hotspot (z.B. dein Smartphone) als Fallback"
+echo "für unterwegs einrichten. Der Pi wechselt dann automatisch das WLAN."
+echo
+
+read -p "Möchtest du jetzt einen Fallback-Hotspot einrichten? (y/n) " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    read -p "Hotspot-Name (SSID) [z.B. NiniHotspot]: " HOTSPOT_SSID
+    read -sp "Hotspot-Passwort: " HOTSPOT_PW
+    echo
+    if [ -n "$HOTSPOT_SSID" ] && [ -n "$HOTSPOT_PW" ]; then
+        # Prüfen, ob der Hotspot in Reichweite ist (scan)
+        if nmcli device wifi list | grep -q "$HOTSPOT_SSID"; then
+            echo -e "${YELLOW}Hotspot gefunden. Verbinde mit $HOTSPOT_SSID...${NC}"
+            if sudo nmcli device wifi connect "$HOTSPOT_SSID" password "$HOTSPOT_PW"; then
+                echo -e "${GREEN}Erfolgreich mit $HOTSPOT_SSID verbunden und gespeichert!${NC}"
+            else
+                echo -e "${RED}Fehler beim Verbinden. Profil wird trotzdem offline gespeichert...${NC}"
+            fi
+        else
+            # Offline-Profil anlegen, falls Hotspot nicht aktiv oder außer Reichweite
+            echo -e "${YELLOW}Hotspot nicht aktiv/in Reichweite. Erstelle Profil offline...${NC}"
+            if sudo nmcli connection add \
+                type wifi \
+                con-name "$HOTSPOT_SSID" \
+                ifname wlan0 \
+                ssid "$HOTSPOT_SSID" \
+                -- \
+                wifi-sec.key-mgmt wpa-psk \
+                wifi-sec.psk "$HOTSPOT_PW" >/dev/null 2>&1; then
+                echo -e "${GREEN}WLAN-Profil für $HOTSPOT_SSID wurde erfolgreich angelegt!${NC}"
+            else
+                echo -e "${RED}Fehler beim Erstellen des Offline-WLAN-Profils.${NC}"
+            fi
+        fi
+    else
+        echo -e "${RED}Eingabe unvollständig. Überspringe Hotspot-Einrichtung.${NC}"
+    fi
+fi
+
+# ==============================================================================
 # Offline-Datenbank Check
 # ==============================================================================
 echo -e "${BLUE}================================================================${NC}"
