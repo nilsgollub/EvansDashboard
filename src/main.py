@@ -4,10 +4,12 @@ import threading
 import time
 import math
 import random
+import subprocess
 import requests
 from ui import DashboardUI
 from osm_api import get_speed_limit
 from gps_reader import GPSReader
+from version import VERSION
 
 # Konfiguration
 SIMULATOR_ENABLED = False  # Auf True setzen, um Marly-Simulation bei GPS-Verlust zu aktivieren
@@ -23,6 +25,8 @@ current_state = {
     'lat': 46.779,  # Startwert Marly, damit Wetter sofort geladen wird
     'lon': 7.152,
     'last_update': 0.0,  # Timestamp des letzten echten GPS-Updates
+    'wifi_ssid': None,   # Aktuell verbundenes WLAN
+    'wifi_signal': 0,    # Signalstärke in % (0-100)
     'weather_temp': None,
     'weather_desc': None
 }
@@ -192,8 +196,48 @@ def fetch_weather_data():
         else:
             # Bei Fehler oder fehlendem GPS alle 10 Sekunden neu versuchen
             time.sleep(10)
+def wifi_monitor():
+    """
+    Überwacht den WLAN-Status per nmcli (NetworkManager CLI).
+    Liest SSID und Signalstärke alle 10 Sekunden aus.
+    Funktioniert nur auf Linux mit NetworkManager (Raspberry Pi OS).
+    """
+    while True:
+        try:
+            # nmcli gibt die aktive Verbindung im terse-Format zurück
+            result = subprocess.run(
+                ['nmcli', '-t', '-f', 'ACTIVE,SSID,SIGNAL', 'device', 'wifi'],
+                capture_output=True, text=True, timeout=5
+            )
+            ssid = None
+            signal = 0
+            for line in result.stdout.strip().split('\n'):
+                parts = line.split(':')
+                if len(parts) >= 3 and parts[0] == 'yes':
+                    ssid = parts[1]
+                    try:
+                        signal = int(parts[2])
+                    except ValueError:
+                        signal = 0
+                    break
+            current_state['wifi_ssid'] = ssid
+            current_state['wifi_signal'] = signal
+            if ssid:
+                print(f"[WIFI] Verbunden: {ssid} ({signal}%)")
+            else:
+                print("[WIFI] Nicht verbunden")
+        except FileNotFoundError:
+            # nmcli nicht verfügbar (z.B. unter Windows beim Entwickeln)
+            current_state['wifi_ssid'] = None
+            current_state['wifi_signal'] = 0
+        except Exception as e:
+            print(f"[WIFI] Fehler: {e}")
+        time.sleep(10)
 
 def main():
+    print(f"[MAIN] Evans Co-Pilot Dashboard v{VERSION}")
+    print("[MAIN] Dashboard gestartet. Beenden mit 'Escape'.")
+    
     # GPS Thread starten
     gps_reader = GPSReader()
     gps_thread = threading.Thread(target=gps_reader.read_data, args=(current_state,), daemon=True)
@@ -211,12 +255,15 @@ def main():
     weather_thread = threading.Thread(target=fetch_weather_data, daemon=True)
     weather_thread.start()
     
+    # WiFi-Monitor Thread starten
+    wifi_thread = threading.Thread(target=wifi_monitor, daemon=True)
+    wifi_thread.start()
+    
     # UI Initialisieren
     ui = DashboardUI(width=480, height=320, fullscreen=False)
     clock = pygame.time.Clock()
     
     running = True
-    print("[MAIN] Dashboard gestartet. Beenden mit 'Escape'.")
     
     while running:
         for event in pygame.event.get():
@@ -247,7 +294,10 @@ def main():
             is_simulated=is_sim,
             has_fix=has_fix,
             weather_temp=current_state.get('weather_temp'),
-            weather_desc=current_state.get('weather_desc')
+            weather_desc=current_state.get('weather_desc'),
+            wifi_ssid=current_state.get('wifi_ssid'),
+            wifi_signal=current_state.get('wifi_signal', 0),
+            version=VERSION
         )
         
         # 30 Frames per Second

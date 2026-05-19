@@ -24,6 +24,7 @@ class DashboardUI:
         self.font_time = pygame.font.SysFont('arial', 28, bold=True)
         self.font_date = pygame.font.SysFont('arial', 18)
         self.font_weather = pygame.font.SysFont('arial', 22, bold=True)
+        self.font_version = pygame.font.SysFont('arial', 11)  # Tiny font für Versionsnummer
         
         # Farben (RGB)
         self.COLOR_BG = (15, 15, 20)      # Sehr dunkles Blau-Grau
@@ -234,7 +235,38 @@ class DashboardUI:
             qm_rect = qm_surf.get_rect(center=(cx, cy))
             self.screen.blit(qm_surf, qm_rect)
 
-    def render(self, current_speed, speed_limit, sats, road_type, altitude, heading, is_simulated=True, has_fix=True, weather_temp=None, weather_desc=None):
+    def draw_wifi_icon(self, x, y, signal_pct):
+        """
+        Zeichnet ein WiFi-Signalstärke-Icon (3 Bögen + Punkt).
+        signal_pct: 0-100 (0=kein Signal, 100=voll)
+        """
+        # Farbe basierend auf Signalstärke
+        if signal_pct >= 60:
+            color = (40, 200, 120)    # Grün: gutes Signal
+        elif signal_pct >= 30:
+            color = (240, 200, 40)    # Gelb: mittleres Signal
+        elif signal_pct > 0:
+            color = (240, 120, 40)    # Orange: schwaches Signal
+        else:
+            color = (80, 80, 90)      # Grau: kein Signal
+        
+        dim_color = (45, 45, 55)  # Dunkelgrau für inaktive Bögen
+        
+        # Basispunkt unten Mitte
+        bx = x + 10
+        by = y + 16
+        
+        # Punkt am Fuß
+        pygame.draw.circle(self.screen, color if signal_pct > 0 else dim_color, (bx, by), 2)
+        
+        # 3 Bögen (von innen nach außen)
+        for i, threshold in enumerate([15, 40, 65]):
+            arc_color = color if signal_pct >= threshold else dim_color
+            radius = 6 + i * 5
+            rect = pygame.Rect(bx - radius, by - radius, radius * 2, radius * 2)
+            pygame.draw.arc(self.screen, arc_color, rect, math.radians(30), math.radians(150), 2)
+
+    def render(self, current_speed, speed_limit, sats, road_type, altitude, heading, is_simulated=True, has_fix=True, weather_temp=None, weather_desc=None, wifi_ssid=None, wifi_signal=0, version=None):
         self.screen.fill(self.COLOR_BG)
         
         # --- 1. TOP BAR (Höhe: 45px) ---
@@ -350,18 +382,43 @@ class DashboardUI:
         alt_surface = self.font_info.render(f"{heading_text} | {int(altitude)}m", True, self.COLOR_GRAY)
         self.screen.blit(alt_surface, (85, 278))
         
-        # 3.3 Strassentyp (Zentriert)
+        # 3.3 WiFi-Status (Mitte-Links vom Strassentyp)
+        wifi_icon_x = 165
+        wifi_icon_y = 275
+        self.draw_wifi_icon(wifi_icon_x, wifi_icon_y, wifi_signal)
+        
+        # SSID neben dem Icon (gekürzt auf max 12 Zeichen)
+        if wifi_ssid:
+            ssid_display = wifi_ssid[:12] + ('..' if len(wifi_ssid) > 12 else '')
+            ssid_color = (180, 190, 200)
+        else:
+            ssid_display = "--"
+            ssid_color = (80, 80, 90)
+        ssid_surf = self.font_tag.render(ssid_display, True, ssid_color)
+        self.screen.blit(ssid_surf, (wifi_icon_x + 22, wifi_icon_y + 6))
+        
+        # 3.4 Strassentyp (Zentriert-Rechts)
         road_key = str(road_type).lower()
         translated_road = self.ROAD_TYPE_TRANSLATIONS.get(road_key, road_type)
         road_surface = self.font_info.render(translated_road, True, self.COLOR_WHITE)
-        road_rect = road_surface.get_rect(center=(self.width // 2 + 10, 290))
+        road_rect = road_surface.get_rect(center=(self.width // 2 + 40, 290))
         self.screen.blit(road_surface, road_rect)
         
-        # 3.4 Satelliten (Rechts)
-        sat_color = self.COLOR_GREEN if sats >= 4 else self.COLOR_RED
+        # 3.5 Satelliten (Rechts) – Orange bei wenig Sats statt unlesbarem Dunkelrot
+        if sats >= 4:
+            sat_color = self.COLOR_GREEN
+        elif sats >= 1:
+            sat_color = (255, 180, 40)  # Helles Orange – gut lesbar auf dunklem Hintergrund
+        else:
+            sat_color = (180, 180, 190) # Helles Grau bei 0 Sats
         sats_surface = self.font_info.render(f"Sats: {sats}", True, sat_color)
         sats_rect = sats_surface.get_rect(midright=(self.width - 20, 290))
         self.screen.blit(sats_surface, sats_rect)
+        
+        # 3.6 Versionsnummer (Ganz unten links, dezent)
+        if version:
+            ver_surf = self.font_version.render(f"v{version}", True, (55, 55, 65))
+            self.screen.blit(ver_surf, (5, self.height - 14))
         
         # 4. Display aktualisieren
         pygame.display.flip()
