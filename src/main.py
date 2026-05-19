@@ -199,27 +199,43 @@ def fetch_weather_data():
 def wifi_monitor():
     """
     Überwacht den WLAN-Status per nmcli (NetworkManager CLI).
-    Liest SSID und Signalstärke alle 10 Sekunden aus.
-    Funktioniert nur auf Linux mit NetworkManager (Raspberry Pi OS).
+    Nutzt 'connection show --active' statt 'device wifi' um keinen
+    teuren WLAN-Scan auszulösen (kritisch für Pi Zero WH Performance).
     """
+    # Warten bis das System vollständig gebootet ist
+    time.sleep(15)
+    print("[WIFI] WiFi-Monitor gestartet")
+    
     while True:
         try:
-            # nmcli gibt die aktive Verbindung im terse-Format zurück
+            # Aktive WLAN-Verbindung abfragen (KEIN Scan!)
             result = subprocess.run(
-                ['nmcli', '-t', '-f', 'ACTIVE,SSID,SIGNAL', 'device', 'wifi'],
+                ['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show', '--active'],
                 capture_output=True, text=True, timeout=5
             )
             ssid = None
-            signal = 0
             for line in result.stdout.strip().split('\n'):
                 parts = line.split(':')
-                if len(parts) >= 3 and parts[0] == 'yes':
-                    ssid = parts[1]
-                    try:
-                        signal = int(parts[2])
-                    except ValueError:
-                        signal = 0
+                if len(parts) >= 2 and parts[1] == '802-11-wireless':
+                    ssid = parts[0]
                     break
+            
+            # Signalstärke separat abfragen (liest nur cached Werte)
+            signal = 0
+            if ssid:
+                sig_result = subprocess.run(
+                    ['nmcli', '-t', '-f', 'SIGNAL', 'device', 'wifi', 'list', '--rescan', 'no'],
+                    capture_output=True, text=True, timeout=5
+                )
+                # Erste Zeile mit Wert nehmen (aktives Netz steht oben)
+                for line in sig_result.stdout.strip().split('\n'):
+                    try:
+                        signal = int(line.strip())
+                        if signal > 0:
+                            break
+                    except ValueError:
+                        continue
+            
             current_state['wifi_ssid'] = ssid
             current_state['wifi_signal'] = signal
             if ssid:
@@ -230,9 +246,11 @@ def wifi_monitor():
             # nmcli nicht verfügbar (z.B. unter Windows beim Entwickeln)
             current_state['wifi_ssid'] = None
             current_state['wifi_signal'] = 0
+        except subprocess.TimeoutExpired:
+            print("[WIFI] nmcli Timeout - überspringe")
         except Exception as e:
             print(f"[WIFI] Fehler: {e}")
-        time.sleep(10)
+        time.sleep(15)
 
 def main():
     print(f"[MAIN] Evans Co-Pilot Dashboard v{VERSION}")
