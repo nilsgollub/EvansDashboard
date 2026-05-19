@@ -79,9 +79,13 @@ if __name__ == "__main__":
     password = sys.argv[3]
     
     # We will run:
+    # 0. Recovery commands to clean up locks from previous interrupted runs
     # 1. Update git repo
     # 2. Run the setup script!
     commands = [
+        "sudo killall -9 apt apt-get dpkg 2>/dev/null || true",
+        "sudo rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock",
+        "sudo dpkg --configure -a",
         "cd ~/EvansDashboard && git reset --hard && git pull && chmod +x setup_fresh_pi.sh"
     ]
     
