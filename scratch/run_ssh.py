@@ -21,47 +21,44 @@ def run_ssh_commands(host, username, password, commands):
             channel.get_pty()
             channel.exec_command(cmd)
             
-            # Read output in real-time
-            while True:
-                if channel.recv_ready():
+            try:
+                # Read output in real-time
+                while True:
+                    if channel.recv_ready():
+                        output = channel.recv(1024).decode('utf-8', errors='ignore')
+                        sys.stdout.write(output)
+                        sys.stdout.flush()
+                    
+                    if channel.exit_status_ready():
+                        break
+                    time.sleep(0.1)
+                
+                # Print remaining output
+                while channel.recv_ready():
                     output = channel.recv(1024).decode('utf-8', errors='ignore')
                     sys.stdout.write(output)
                     sys.stdout.flush()
-                
-                # If the script asks for input (e.g. y/n or password), we can automatically handle it!
-                # Wait, the script asks:
-                # 1. sudo password? Since we run as sudo, it might ask for sudo password.
-                # 2. "Möchtest du jetzt einen Fallback-Hotspot einrichten? (y/n)"
-                # 3. Hotspot SSID
-                # 4. Hotspot Password
-                # 5. "Möchtest du den Pi jetzt neu starten? (y/n)"
-                # Let's detect these prompts and handle them if needed, or wait:
-                # Since the user requested me to run it, let's look for prompts.
-                # Wait, if we run it non-interactively, can we pre-seed the inputs?
-                # Actually, the user can just let us run it and we can automatically answer "n" to the hotspot for now,
-                # or we can ask them for the hotspot credentials too!
-                # Let's check if we can stream input/output.
-                
-                if channel.exit_status_ready():
+                    
+                print(f"\nCommand finished with exit code: {channel.recv_exit_status()}")
+            except Exception as cmd_error:
+                if "reboot" in cmd:
+                    print("\nConnection closed. This is expected as the Pi is rebooting! 🎉")
                     break
-                time.sleep(0.1)
-            
-            # Print remaining output
-            while channel.recv_ready():
-                output = channel.recv(1024).decode('utf-8', errors='ignore')
-                sys.stdout.write(output)
-                sys.stdout.flush()
-                
-            print(f"\nCommand finished with exit code: {channel.recv_exit_status()}")
+                else:
+                    print(f"\nError running command: {cmd_error}")
+                    raise cmd_error
             
     except Exception as e:
-        print(f"Error: {e}")
+        if "reboot" in str(e) or "Connection reset" in str(e):
+            print("\nConnection closed. This is expected as the Pi is rebooting! 🎉")
+        else:
+            print(f"Error: {e}")
     finally:
         ssh.close()
 
 if __name__ == "__main__":
     if len(sys.argv) < 4:
-        print("Usage: python run_ssh.py <host> <username> <password>")
+        print("Usage: python run_ssh.py <host> <username> <password> [<hotspot_ssid> <hotspot_pw>]")
         sys.exit(1)
         
     host = sys.argv[1]
@@ -74,5 +71,13 @@ if __name__ == "__main__":
     commands = [
         "cd ~/EvansDashboard && git reset --hard && git pull && chmod +x setup_fresh_pi.sh"
     ]
+    
+    setup_cmd = "cd ~/EvansDashboard && ./setup_fresh_pi.sh --non-interactive --reboot"
+    if len(sys.argv) >= 6:
+        ssid = sys.argv[4]
+        pw = sys.argv[5]
+        setup_cmd += f" --hotspot-ssid '{ssid}' --hotspot-pw '{pw}'"
+        
+    commands.append(setup_cmd)
     
     run_ssh_commands(host, username, password, commands)
