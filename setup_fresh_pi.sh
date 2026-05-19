@@ -17,6 +17,24 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Standardwerte für Parameter
+HOTSPOT_SSID=""
+HOTSPOT_PW=""
+AUTO_REBOOT="false"
+NON_INTERACTIVE="false"
+
+# Argumente parsen
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --hotspot-ssid) HOTSPOT_SSID="$2"; shift ;;
+        --hotspot-pw) HOTSPOT_PW="$2"; shift ;;
+        --reboot) AUTO_REBOOT="true" ;;
+        --non-interactive) NON_INTERACTIVE="true" ;;
+        *) echo "Unbekannter Parameter: $1"; exit 1 ;;
+    esac
+    shift
+done
+
 echo -e "${BLUE}================================================================${NC}"
 echo -e "${GREEN}      Evans Co-Pilot Dashboard v1.1.0 - Fresh Setup Script      ${NC}"
 echo -e "${BLUE}================================================================${NC}"
@@ -152,12 +170,23 @@ echo "Du kannst hier einen mobilen Hotspot (z.B. dein Smartphone) als Fallback"
 echo "für unterwegs einrichten. Der Pi wechselt dann automatisch das WLAN."
 echo
 
-read -p "Möchtest du jetzt einen Fallback-Hotspot einrichten? (y/n) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    read -p "Hotspot-Name (SSID) [z.B. NiniHotspot]: " HOTSPOT_SSID
-    read -sp "Hotspot-Passwort: " HOTSPOT_PW
+SETUP_HOTSPOT="false"
+if [ "$NON_INTERACTIVE" = "true" ]; then
+    if [ -n "$HOTSPOT_SSID" ] && [ -n "$HOTSPOT_PW" ]; then
+        SETUP_HOTSPOT="true"
+    fi
+else
+    read -p "Möchtest du jetzt einen Fallback-Hotspot einrichten? (y/n) " -n 1 -r
     echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        SETUP_HOTSPOT="true"
+        read -p "Hotspot-Name (SSID) [z.B. NiniHotspot]: " HOTSPOT_SSID
+        read -sp "Hotspot-Passwort: " HOTSPOT_PW
+        echo
+    fi
+fi
+
+if [ "$SETUP_HOTSPOT" = "true" ]; then
     if [ -n "$HOTSPOT_SSID" ] && [ -n "$HOTSPOT_PW" ]; then
         # Prüfen, ob der Hotspot in Reichweite ist (scan)
         if nmcli device wifi list | grep -q "$HOTSPOT_SSID"; then
@@ -221,8 +250,22 @@ echo "wirksam zu machen."
 echo -e "Nach dem Neustart bootet das Dashboard automatisch! ${YELLOW}v1.1.0${NC}"
 echo -e "${BLUE}================================================================${NC}"
 
-read -p "Möchtest du den Pi jetzt neu starten? (y/n) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+DO_REBOOT="false"
+if [ "$NON_INTERACTIVE" = "true" ]; then
+    if [ "$AUTO_REBOOT" = "true" ]; then
+        DO_REBOOT="true"
+    fi
+else
+    read -p "Möchtest du den Pi jetzt neu starten? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        DO_REBOOT="true"
+    fi
+fi
+
+if [ "$DO_REBOOT" = "true" ]; then
+    echo -e "${YELLOW}Starte System neu...${NC}"
     sudo reboot
+else
+    echo -e "${YELLOW}Kein automatischer Neustart konfiguriert. Bitte starte den Pi manuell neu.${NC}"
 fi
