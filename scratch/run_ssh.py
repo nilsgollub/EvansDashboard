@@ -23,14 +23,20 @@ def run_ssh_commands(host, username, password, commands):
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     
     try:
-        ssh.connect(host, username=username, password=password, timeout=10)
-        safe_print("Connected successfully!")
-        
+        retries = 5
+        for attempt in range(1, retries + 1):
+            try:
+                ssh.connect(host, username=username, password=password, timeout=30, banner_timeout=60)
+                safe_print("Connected successfully!")
+                break
+            except Exception as conn_err:
+                if attempt == retries:
+                    raise conn_err
+                safe_print(f"Connection attempt {attempt} failed: {conn_err}. Retrying in 5 seconds...")
+                time.sleep(5)
+            
         for cmd in commands:
             safe_print(f"\n--- Running: {cmd} ---")
-            # We use invoke_shell for interactive or complex scripts,
-            # or exec_command for normal execution.
-            # Since the setup script is interactive, we will use an interactive shell!
             transport = ssh.get_transport()
             channel = transport.open_session()
             channel.get_pty()
