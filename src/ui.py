@@ -24,7 +24,7 @@ class DashboardUI:
         self.font_time = pygame.font.SysFont('arial', 28, bold=True)
         self.font_date = pygame.font.SysFont('arial', 18)
         self.font_weather = pygame.font.SysFont('arial', 22, bold=True)
-        self.font_version = pygame.font.SysFont('arial', 11)  # Tiny font für Versionsnummer
+
         
         # Farben (RGB)
         self.COLOR_BG = (15, 15, 20)      # Sehr dunkles Blau-Grau
@@ -285,6 +285,11 @@ class DashboardUI:
         date_surf = self.font_date.render(date_str, True, (200, 200, 210))
         self.screen.blit(date_surf, (15 + time_surf.get_width() + 10, 16))
         
+        # Version neben dem Datum (gut lesbar für Debugging)
+        if version:
+            ver_surf = self.font_tag.render(f"v{version}", True, (120, 120, 135))
+            self.screen.blit(ver_surf, (15 + time_surf.get_width() + 10 + date_surf.get_width() + 8, 19))
+        
         # 1.2 Wetter (Mitte) - Zentriert gerendert aus Temperatur und Custom-Vektor-Icon
         if weather_temp is not None and weather_desc is not None:
             temp_str = f"{weather_temp}°C"
@@ -415,10 +420,7 @@ class DashboardUI:
         sats_rect = sats_surface.get_rect(midright=(self.width - 20, 290))
         self.screen.blit(sats_surface, sats_rect)
         
-        # 3.6 Versionsnummer (Ganz unten links, dezent)
-        if version:
-            ver_surf = self.font_version.render(f"v{version}", True, (55, 55, 65))
-            self.screen.blit(ver_surf, (5, self.height - 14))
+
         
         # 4. Display aktualisieren
         pygame.display.flip()
