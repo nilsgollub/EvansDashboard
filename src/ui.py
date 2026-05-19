@@ -282,7 +282,7 @@ class DashboardUI:
         time_surf = self.font_time.render(time_str, True, self.COLOR_WHITE)
         self.screen.blit(time_surf, (15, 8))
         
-        date_surf = self.font_date.render(date_str, True, self.COLOR_GRAY)
+        date_surf = self.font_date.render(date_str, True, (200, 200, 210))
         self.screen.blit(date_surf, (15 + time_surf.get_width() + 10, 16))
         
         # 1.2 Wetter (Mitte) - Zentriert gerendert aus Temperatur und Custom-Vektor-Icon
