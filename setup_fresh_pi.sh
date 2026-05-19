@@ -139,7 +139,7 @@ for i in $(seq 1 15); do
 done
 
 # Starte das Dashboard im Kiosk-Modus
-exec ~/.venv/bin/python -u src/main.py > ~/dashboard.log 2>&1
+exec ~/EvansDashboard/.venv/bin/python -u src/main.py > ~/dashboard.log 2>&1
 EOF
 
 chmod +x "$XINIT_FILE"
