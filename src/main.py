@@ -18,6 +18,9 @@ from sun_calculator import get_dimming_factor
 # Konfiguration
 SIMULATOR_ENABLED = False  # Auf True setzen, um Marly-Simulation bei GPS-Verlust zu aktivieren
 DIMMING_ENABLED = False    # Auf False setzen, um automatisches Dimmen testweise zu deaktivieren (immer 100% Helligkeit)
+GPS_MODE = 'serial'        # 'serial' fuer USB-Modul, 'network' fuer Smartphone-GPS ueber WLAN/Hotspot
+GPS_IP = None              # None fuer automatische Ermittlung des Gateways, oder feste IP (z.B. '192.168.43.1')
+GPS_PORT = 20000           # Standard-Port fuer GPS-Streaming-Apps (z.B. 20000 bei 'Share GPS' / 'GPS Tether')
 
 # Globale Variablen für Threading-Datenaustausch
 current_state = {
@@ -331,7 +334,7 @@ def main():
     init_hardware_watchdog()
     
     # GPS Thread starten
-    gps_reader = GPSReader()
+    gps_reader = GPSReader(mode=GPS_MODE, ip=GPS_IP, port=GPS_PORT)
     gps_thread = threading.Thread(target=gps_reader.read_data, args=(current_state,), daemon=True)
     gps_thread.start()
     
