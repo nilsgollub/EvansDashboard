@@ -285,11 +285,6 @@ class DashboardUI:
         date_surf = self.font_date.render(date_str, True, (200, 200, 210))
         self.screen.blit(date_surf, (15 + time_surf.get_width() + 10, 16))
         
-        # Version neben dem Datum (gut lesbar für Debugging)
-        if version:
-            ver_surf = self.font_tag.render(f"v{version}", True, (120, 120, 135))
-            self.screen.blit(ver_surf, (15 + time_surf.get_width() + 10 + date_surf.get_width() + 8, 19))
-        
         # 1.2 Wetter (Mitte) - Zentriert gerendert aus Temperatur und Custom-Vektor-Icon
         if weather_temp is not None and weather_desc is not None:
             temp_str = f"{weather_temp}°C"
@@ -374,6 +369,12 @@ class DashboardUI:
         kmh_surface = self.font_info.render("km/h", True, self.COLOR_GRAY)
         kmh_rect = kmh_surface.get_rect(topright=(self.width - 35, speed_rect.bottom - 25))
         self.screen.blit(kmh_surface, kmh_rect)
+        
+        # 2.3 Versionsanzeige knapp über der unteren Leiste ganz rechts
+        if version:
+            ver_surf = self.font_tag.render(f"v{version}", True, (90, 90, 105))
+            ver_rect = ver_surf.get_rect(bottomright=(self.width - 20, 255))
+            self.screen.blit(ver_surf, ver_rect)
         
         # --- 3. BOTTOM BAR (Y: 260 bis 320) ---
         # Trennlinie
