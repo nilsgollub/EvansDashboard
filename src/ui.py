@@ -266,7 +266,7 @@ class DashboardUI:
             rect = pygame.Rect(bx - radius, by - radius, radius * 2, radius * 2)
             pygame.draw.arc(self.screen, arc_color, rect, math.radians(30), math.radians(150), 2)
 
-    def render(self, current_speed, speed_limit, sats, road_type, altitude, heading, is_simulated=True, has_fix=True, weather_temp=None, weather_desc=None, wifi_ssid=None, wifi_signal=0, version=None):
+    def render(self, current_speed, speed_limit, sats, road_type, altitude, heading, is_simulated=True, has_fix=True, weather_temp=None, weather_desc=None, wifi_ssid=None, wifi_signal=0, version=None, dim_factor=1.0):
         self.screen.fill(self.COLOR_BG)
         
         # --- 1. TOP BAR (Höhe: 45px) ---
@@ -422,5 +422,13 @@ class DashboardUI:
         
 
         
-        # 4. Display aktualisieren
+        # 4. Software-Dimmen (stufenloser Fallback bei Nacht / Dämmerung)
+        if dim_factor < 1.0:
+            dim_val = max(0.1, dim_factor)  # Mindesthelligkeit von 10%, damit man noch etwas sieht
+            alpha = int((1.0 - dim_val) * 255)
+            overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, alpha))
+            self.screen.blit(overlay, (0, 0))
+
+        # 5. Display aktualisieren
         pygame.display.flip()

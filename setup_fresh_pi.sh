@@ -71,14 +71,18 @@ sudo apt install -y \
     libsdl2-ttf-2.0-0 \
     network-manager
 
-echo -e "${BLUE}[3/7] GPS UART/serielle Schnittstelle konfigurieren...${NC}"
-# UART in config.txt aktivieren
+echo -e "${BLUE}[3/7] GPS UART/serielle Schnittstelle & Watchdog konfigurieren...${NC}"
+# UART & Watchdog in config.txt aktivieren
 CONFIG_FILE="/boot/firmware/config.txt"
 [ -f "$CONFIG_FILE" ] || CONFIG_FILE="/boot/config.txt"
 
-echo -e "${YELLOW}Konfiguriere UART in $CONFIG_FILE...${NC}"
+echo -e "${YELLOW}Konfiguriere UART & Watchdog in $CONFIG_FILE...${NC}"
 if ! grep -q "enable_uart=1" "$CONFIG_FILE"; then
     echo "enable_uart=1" | sudo tee -a "$CONFIG_FILE"
+fi
+
+if ! grep -q "dtparam=watchdog=on" "$CONFIG_FILE"; then
+    echo "dtparam=watchdog=on" | sudo tee -a "$CONFIG_FILE"
 fi
 
 # Serielle Konsole in cmdline.txt deaktivieren (damit das GPS ungestört senden kann)

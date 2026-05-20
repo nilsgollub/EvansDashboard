@@ -6,10 +6,14 @@ import math
 import random
 import subprocess
 import requests
+import os
+import glob
+from datetime import datetime, timezone
 from ui import DashboardUI
 from osm_api import get_speed_limit
 from gps_reader import GPSReader
 from version import VERSION
+from sun_calculator import get_dimming_factor
 
 # Konfiguration
 SIMULATOR_ENABLED = False  # Auf True setzen, um Marly-Simulation bei GPS-Verlust zu aktivieren
@@ -28,8 +32,72 @@ current_state = {
     'wifi_ssid': None,   # Aktuell verbundenes WLAN
     'wifi_signal': 0,    # Signalstärke in % (0-100)
     'weather_temp': None,
-    'weather_desc': None
+    'weather_desc': None,
+    'dim_factor': 1.0    # Dynamischer Dimmfaktor (1.0 = voll, 0.15 = gedimmt)
 }
+
+# --- Hardware Backlight-Steuerung ---
+_backlight_path = None
+_max_brightness = 255
+
+def init_hardware_backlight():
+    global _backlight_path, _max_brightness
+    paths = glob.glob("/sys/class/backlight/*")
+    if paths:
+        _backlight_path = paths[0]
+        try:
+            with open(os.path.join(_backlight_path, "max_brightness"), "r") as f:
+                _max_brightness = int(f.read().strip())
+            print(f"[SYSTEM] Hardware-Backlight gefunden unter {_backlight_path} (Max Helligkeit: {_max_brightness})")
+        except Exception:
+            _max_brightness = 255
+
+def set_hardware_backlight(dim_factor):
+    global _backlight_path, _max_brightness
+    if _backlight_path is None:
+        return False
+    try:
+        val = int(max(0.1, dim_factor) * _max_brightness)
+        # Wert im gültigen Bereich halten
+        val = max(0, min(val, _max_brightness))
+        with open(os.path.join(_backlight_path, "brightness"), "w") as f:
+            f.write(str(val))
+        return True
+    except PermissionError:
+        # Kein Schreibrecht (z. B. wenn nicht als sudo gestartet)
+        return False
+    except Exception as e:
+        print(f"[SYSTEM] Fehler beim Schreiben des Backlights: {e}")
+        return False
+
+# --- Hardware & Software Watchdog ---
+_watchdog_fd = None
+
+def init_hardware_watchdog():
+    global _watchdog_fd
+    if os.path.exists("/dev/watchdog"):
+        try:
+            _watchdog_fd = os.open("/dev/watchdog", os.O_WRONLY)
+            print("[SYSTEM] Hardware-Watchdog (/dev/watchdog) erfolgreich initialisiert.")
+        except Exception as e:
+            print(f"[SYSTEM] Hardware-Watchdog konnte nicht geöffnet werden: {e}")
+            _watchdog_fd = None
+
+def feed_watchdogs():
+    global _watchdog_fd
+    # 1. Hardware Watchdog füttern (falls initialisiert)
+    if _watchdog_fd is not None:
+        try:
+            os.write(_watchdog_fd, b'\x00')
+        except Exception as e:
+            print(f"[SYSTEM] Fehler beim Füttern des Hardware-Watchdogs: {e}")
+            
+    # 2. Software Watchdog-Heartbeat-Datei schreiben (für externe Kontrollskripte)
+    try:
+        with open("/tmp/dashboard_heartbeat", "w") as f:
+            f.write(str(time.time()))
+    except Exception:
+        pass
 
 def run_simulation():
     """
@@ -256,6 +324,10 @@ def main():
     print(f"[MAIN] Evans Co-Pilot Dashboard v{VERSION}")
     print("[MAIN] Dashboard gestartet. Beenden mit 'Escape'.")
     
+    # Hardware-Subsysteme initialisieren
+    init_hardware_backlight()
+    init_hardware_watchdog()
+    
     # GPS Thread starten
     gps_reader = GPSReader()
     gps_thread = threading.Thread(target=gps_reader.read_data, args=(current_state,), daemon=True)
@@ -282,6 +354,8 @@ def main():
     clock = pygame.time.Clock()
     
     running = True
+    frame_count = 0
+    dim_factor = 1.0
     
     while running:
         for event in pygame.event.get():
@@ -290,6 +364,9 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
+                    
+        # Watchdogs füttern (in jeder Iteration der Rendering-Schleife)
+        feed_watchdogs()
                     
         # Prüfen, ob wir im Simulationsmodus sind (kein GPS-Update in den letzten 10s und Simulation aktiv)
         last_up = current_state.get('last_update', 0.0)
@@ -301,7 +378,18 @@ def main():
         
         is_sim = SIMULATOR_ENABLED and not has_fix
         
-        # Aktuellen State an UI übergeben
+        # Helligkeit berechnen und anwenden (alle 90 Frames = ca. 3 Sek bei 30 FPS)
+        frame_count += 1
+        if frame_count % 90 == 0:
+            lat = current_state.get('lat')
+            lon = current_state.get('lon')
+            if lat is not None and lon is not None:
+                dim_factor = get_dimming_factor(lat, lon, datetime.now(timezone.utc))
+                current_state['dim_factor'] = dim_factor
+                # Versuche, das Hardware-Backlight anzupassen
+                set_hardware_backlight(dim_factor)
+        
+        # Aktuellen State an UI übergeben (inkl. Dimmfaktor)
         ui.render(
             current_speed=current_state['speed'],
             speed_limit=current_state['limit'],
@@ -315,7 +403,8 @@ def main():
             weather_desc=current_state.get('weather_desc'),
             wifi_ssid=current_state.get('wifi_ssid'),
             wifi_signal=current_state.get('wifi_signal', 0),
-            version=VERSION
+            version=VERSION,
+            dim_factor=dim_factor
         )
         
         # 30 Frames per Second

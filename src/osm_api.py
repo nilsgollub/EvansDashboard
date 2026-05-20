@@ -3,6 +3,7 @@ import sqlite3
 import math
 import requests
 import logging
+import threading
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -11,6 +12,30 @@ OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
 # Pfad zur Offline-Datenbank (liegt im Hauptverzeichnis des Projekts)
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "switzerland_roads.db")
+
+_local = threading.local()
+
+def get_db_connection():
+    """
+    Gibt eine thread-lokale, optimierte SQLite-Verbindung zurück.
+    Öffnet die Datenbank im reinen Read-Only-Modus für maximale SD-Kartenschonung.
+    """
+    if not hasattr(_local, "conn") or _local.conn is None:
+        if os.path.exists(DB_PATH):
+            try:
+                # Zwingend im Read-Only-Modus öffnen
+                _local.conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+                # Performance-PRAGMAs
+                _local.conn.execute("PRAGMA cache_size = -20000;")  # ca. 20 MB Cache im RAM
+                _local.conn.execute("PRAGMA temp_store = MEMORY;")   # Temp-Tabellen im RAM
+                _local.conn.execute("PRAGMA query_only = ON;")       # Keine versehentlichen Writes erlauben
+                logger.info("Optimierte Thread-lokale SQLite-Verbindung geöffnet.")
+            except Exception as e:
+                logger.error(f"Fehler beim Erstellen der DB-Verbindung: {e}")
+                return None
+        else:
+            return None
+    return _local.conn
 
 def calculate_distance_to_segment(p_lat, p_lon, lat1, lon1, lat2, lon2):
     """
@@ -74,7 +99,8 @@ def get_speed_limit_offline(lat, lon, radius=30):
     Fragt die lokale SQLite-Datenbank nach der nächsten Straße ab.
     Gibt ein Tuple zurück: (Tempolimit als int (oder None), Straßentyp als string)
     """
-    if not os.path.exists(DB_PATH):
+    conn = get_db_connection()
+    if not conn:
         return None, None
 
     try:
@@ -94,7 +120,6 @@ def get_speed_limit_offline(lat, lon, radius=30):
         min_lon = lon - lon_delta
         max_lon = lon + lon_delta
         
-        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
         # Schnellabfrage aller Segmente, die mit unserer Bounding-Box überlappen
@@ -105,7 +130,6 @@ def get_speed_limit_offline(lat, lon, radius=30):
         """, (min_lat, max_lat, min_lon, max_lon))
         
         rows = cursor.fetchall()
-        conn.close()
         
         if not rows:
             return None, "Unbekannt"
