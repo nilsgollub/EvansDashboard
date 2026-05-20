@@ -63,21 +63,59 @@ class GPSReader:
                     print(f"[GPS] Fehler bei CFG-NAV5: {e}")
 
                 try:
-                    # 2. CFG-SBAS: SBAS/EGNOS aktivieren mit den PRNs fuer Europa (120, 121, 123, 126) fuer 1-2m Praezision
-                    sbas_payload = (
-                        b'\x01'              # mode: Enabled
-                        b'\x07'              # usage: Range + DiffCorr + Integrity
-                        b'\x03'              # maxSBAS: 3
+                    # 2. GNSS Konfiguration: SBAS deaktivieren, GPS+GLONASS aktivieren (fuer extrem stabilen Doppler/Speed)
+                    sbas_off_payload = (
+                        b'\x00'              # mode: Disabled
+                        b'\x00'              # usage: None
+                        b'\x00'              # maxSBAS: 0
                         b'\x00'              # scanmode2
-                        b'\x00\x62\x00\x00'  # scanmode1: EGNOS PRNs (120, 121, 123, 126)
+                        b'\x00\x00\x00\x00'  # scanmode1: None
                     )
-                    self._send_ubx_msg(0x06, 0x16, sbas_payload)
-                    print("[GPS] UBX CFG-SBAS (EGNOS Europe) gesendet.")
+                    self._send_ubx_msg(0x06, 0x16, sbas_off_payload)
+                    
+                    gnss_payload = (
+                        b'\x00'              # msgVer: 0
+                        b'\x20'              # numTrkChHw: 32
+                        b'\x20'              # numTrkChUse: 32
+                        b'\x02'              # numConfigBlocks: 2
+                        # Block 1: GPS
+                        b'\x00'              # gnssId: 0 (GPS)
+                        b'\x08'              # resTrkCh: 8
+                        b'\x10'              # maxTrkCh: 16
+                        b'\x01'              # flags: enabled
+                        # Block 2: GLONASS  
+                        b'\x06'              # gnssId: 6 (GLONASS)
+                        b'\x08'              # resTrkCh: 8
+                        b'\x0E'              # maxTrkCh: 14
+                        b'\x01'              # flags: enabled
+                    )
+                    self._send_ubx_msg(0x06, 0x3E, gnss_payload)
+                    print("[GPS] UBX CFG-GNSS (GPS+GLONASS) gesendet. SBAS ist aus.")
                 except Exception as e:
-                    print(f"[GPS] Fehler bei CFG-SBAS: {e}")
+                    print(f"[GPS] Fehler bei CFG-GNSS/SBAS: {e}")
 
                 try:
-                    # 3. CFG-AOP: AssistNow Autonomous aktivieren (on-chip AGPS fuer schnellen Fix ohne Internet)
+                    # 3. CFG-RATE: Update-Rate auf 5 Hz (200 ms) erhoehen fuer butterweichen Tacho
+                    rate_payload = b'\xc8\x00\x01\x00\x00\x00' # 200 ms
+                    self._send_ubx_msg(0x06, 0x08, rate_payload)
+                    print("[GPS] UBX CFG-RATE (5 Hz) gesendet.")
+                except Exception as e:
+                    print(f"[GPS] Fehler bei CFG-RATE: {e}")
+
+                try:
+                    # 4. CFG-MSG: NMEA Datenmuell filtern, damit 9600 Baud bei 5 Hz nicht verstopfen
+                    # Wir brauchen nur RMC (Speed/Pos), GGA (Qual/Alt), GSV (Sats in view)
+                    self._send_ubx_msg(0x06, 0x01, b'\xf0\x01\x00\x00\x00\x00\x00\x00') # GLL off
+                    self._send_ubx_msg(0x06, 0x01, b'\xf0\x02\x00\x00\x00\x00\x00\x00') # GSA off
+                    self._send_ubx_msg(0x06, 0x01, b'\xf0\x05\x00\x00\x00\x00\x00\x00') # VTG off
+                    # GSV ist extrem lang, daher nur jeden 5. Zyklus senden (also 1 Hz bei 5 Hz Systemtakt)
+                    self._send_ubx_msg(0x06, 0x01, b'\xf0\x03\x05\x05\x05\x05\x05\x05') # GSV rate = 5
+                    print("[GPS] UBX CFG-MSG (NMEA Filter) gesendet.")
+                except Exception as e:
+                    print(f"[GPS] Fehler bei CFG-MSG: {e}")
+
+                try:
+                    # 5. CFG-AOP: AssistNow Autonomous aktivieren (on-chip AGPS fuer schnellen Fix ohne Internet)
                     aop_payload = b'\x01\x00\x00\x00'
                     self._send_ubx_msg(0x06, 0x33, aop_payload)
                     print("[GPS] UBX CFG-AOP (AssistNow Autonomous) gesendet.")
@@ -85,7 +123,7 @@ class GPSReader:
                     print(f"[GPS] Fehler bei CFG-AOP: {e}")
 
                 try:
-                    # 4. CFG-CFG: Konfiguration dauerhaft im EEPROM/Flash des Moduls sichern
+                    # 6. CFG-CFG: Konfiguration dauerhaft im EEPROM/Flash des Moduls sichern
                     cfg_save_payload = b'\x00\x00\x00\x00\xff\xff\x00\x00\x00\x00\x00\x00\x01'
                     self._send_ubx_msg(0x06, 0x09, cfg_save_payload)
                     print("[GPS] UBX CFG-CFG (Save Config) gesendet.")
