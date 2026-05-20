@@ -334,7 +334,7 @@ class DashboardUI:
 
         tag_w = 105
         tag_h = 26
-        tag_x = self.width - tag_w - 15
+        tag_x = self.width - tag_w - 45
         tag_y = 9
         rect = pygame.Rect(tag_x, tag_y, tag_w, tag_h)
         pygame.draw.rect(self.screen, bg_color, rect, border_radius=13)
@@ -344,6 +344,9 @@ class DashboardUI:
         text_surf = self.font_tag.render(status_text, True, text_color)
         text_rect = text_surf.get_rect(midleft=(tag_x + 28, tag_y + 13))
         self.screen.blit(text_surf, text_rect)
+        
+        # 1.4 WiFi-Status (Obere Leiste ganz rechts)
+        self.draw_wifi_icon(self.width - 35, 12, wifi_signal)
         
         # --- 2. MAIN CENTER (Y: 45 bis 260) ---
         # 2.1 Tempolimit Schild (Linke Spalte)
@@ -387,20 +390,7 @@ class DashboardUI:
         alt_surface = self.font_info.render(f"{heading_text} | {int(altitude)}m", True, self.COLOR_GRAY)
         self.screen.blit(alt_surface, (85, 278))
         
-        # 3.3 WiFi-Status (Mitte-Links vom Strassentyp)
-        wifi_icon_x = 165
-        wifi_icon_y = 275
-        self.draw_wifi_icon(wifi_icon_x, wifi_icon_y, wifi_signal)
-        
-        # SSID neben dem Icon (gekürzt auf max 12 Zeichen)
-        if wifi_ssid:
-            ssid_display = wifi_ssid[:12] + ('..' if len(wifi_ssid) > 12 else '')
-            ssid_color = (180, 190, 200)
-        else:
-            ssid_display = "--"
-            ssid_color = (80, 80, 90)
-        ssid_surf = self.font_tag.render(ssid_display, True, ssid_color)
-        self.screen.blit(ssid_surf, (wifi_icon_x + 22, wifi_icon_y + 6))
+        # 3.3 WiFi-Status entfernt (in die obere Leiste verschoben)
         
         # 3.4 Strassentyp (Zentriert-Rechts)
         road_key = str(road_type).lower()

@@ -89,10 +89,8 @@ if __name__ == "__main__":
     password = sys.argv[3]
     
     commands = [
-        "echo === Dashboard Log ===",
-        "cat ~/dashboard.log || true",
-        "echo === Running Processes ===",
-        "ps aux | grep -E 'Xorg|python|startx' || true"
+        "systemctl --no-pager status evans-dashboard.service",
+        "tail -n 25 ~/dashboard.log || true"
     ]
     
     run_ssh_commands(host, username, password, commands)
