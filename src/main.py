@@ -17,6 +17,7 @@ from sun_calculator import get_dimming_factor
 
 # Konfiguration
 SIMULATOR_ENABLED = False  # Auf True setzen, um Marly-Simulation bei GPS-Verlust zu aktivieren
+DIMMING_ENABLED = False    # Auf False setzen, um automatisches Dimmen testweise zu deaktivieren (immer 100% Helligkeit)
 
 # Globale Variablen für Threading-Datenaustausch
 current_state = {
@@ -326,6 +327,7 @@ def main():
     
     # Hardware-Subsysteme initialisieren
     init_hardware_backlight()
+    set_hardware_backlight(1.0)  # Zu Beginn explizit auf 100% Helligkeit setzen
     init_hardware_watchdog()
     
     # GPS Thread starten
@@ -381,13 +383,18 @@ def main():
         # Helligkeit berechnen und anwenden (alle 90 Frames = ca. 3 Sek bei 30 FPS)
         frame_count += 1
         if frame_count % 90 == 0:
-            lat = current_state.get('lat')
-            lon = current_state.get('lon')
-            if lat is not None and lon is not None:
-                dim_factor = get_dimming_factor(lat, lon, datetime.now(timezone.utc))
-                current_state['dim_factor'] = dim_factor
-                # Versuche, das Hardware-Backlight anzupassen
-                set_hardware_backlight(dim_factor)
+            if DIMMING_ENABLED:
+                lat = current_state.get('lat')
+                lon = current_state.get('lon')
+                if lat is not None and lon is not None:
+                    dim_factor = get_dimming_factor(lat, lon, datetime.now(timezone.utc))
+                    current_state['dim_factor'] = dim_factor
+                    # Versuche, das Hardware-Backlight anzupassen
+                    set_hardware_backlight(dim_factor)
+            else:
+                dim_factor = 1.0
+                current_state['dim_factor'] = 1.0
+                set_hardware_backlight(1.0)
         
         # Aktuellen State an UI übergeben (inkl. Dimmfaktor)
         ui.render(
