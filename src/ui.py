@@ -327,7 +327,7 @@ class DashboardUI:
             pulse = int(150 + 105 * abs(math.sin(time.time() * 3)))
             dot_color = (40, pulse, 40)
 
-        tag_w = 105
+        tag_w = 115
         tag_h = 26
         tag_x = self.width - tag_w - 45
         tag_y = 9
