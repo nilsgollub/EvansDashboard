@@ -18,7 +18,7 @@ from sun_calculator import get_dimming_factor
 # Konfiguration
 SIMULATOR_ENABLED = False  # Auf True setzen, um Marly-Simulation bei GPS-Verlust zu aktivieren
 DIMMING_ENABLED = False    # Auf False setzen, um automatisches Dimmen testweise zu deaktivieren (immer 100% Helligkeit)
-GPS_MODE = 'network'       # 'serial' fuer USB-Modul, 'network' fuer Smartphone-GPS ueber WLAN/Hotspot
+GPS_MODE = 'serial'        # 'serial' fuer USB-Modul, 'network' fuer Smartphone-GPS ueber WLAN/Hotspot
 GPS_IP = None              # None fuer automatische Ermittlung des Gateways, oder feste IP (z.B. '192.168.43.1')
 GPS_PORT = 20000           # Standard-Port fuer GPS-Streaming-Apps (z.B. 20000 bei 'Share GPS' / 'GPS Tether')
 

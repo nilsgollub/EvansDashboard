@@ -2,40 +2,17 @@ import serial
 import pynmea2
 import time
 import logging
-import socket
 
 logger = logging.getLogger(__name__)
 
 class GPSReader:
     def __init__(self, mode='serial', ip=None, port=20000, ports=['/dev/ttyACM0', '/dev/ttyUSB0', '/dev/serial0'], baudrate=9600):
-        self.mode = mode
-        self.ip = ip
-        self.port = port
+        # Wir behalten die Parameter fuer Abwaertskompatibilitaet bei, erzwingen aber den seriellen Modus
+        self.mode = 'serial'
         self.ports = ports
         self.baudrate = baudrate
         self.serial_conn = None
-        self.socket_conn = None
         self.current_port = None
-
-    def _get_default_gateway(self):
-        """Versucht, die IP-Adresse des Standard-Gateways (Smartphone-Hotspot) unter Linux zu ermitteln."""
-        try:
-            with open("/proc/net/route") as f:
-                for line in f:
-                    fields = line.strip().split()
-                    if len(fields) >= 3 and fields[1] == '00000000':
-                        hex_gw = fields[2]
-                        # Hex-Wert (Little-Endian) in IP konvertieren (z.B. "012CA8C0" -> 192.168.43.1)
-                        b1 = int(hex_gw[6:8], 16)
-                        b2 = int(hex_gw[4:6], 16)
-                        b3 = int(hex_gw[2:4], 16)
-                        b4 = int(hex_gw[0:2], 16)
-                        gw_ip = f"{b1}.{b2}.{b3}.{b4}"
-                        print(f"[GPS] Standard-Gateway automatisch ermittelt: {gw_ip}")
-                        return gw_ip
-        except Exception as e:
-            print(f"[GPS] Fehler bei Gateway-Ermittlung: {e}")
-        return "192.168.43.1" # Standard-Fallback fuer Android-Hotspots
 
     def _send_ubx_msg(self, msg_class, msg_id, payload):
         """Hilfsfunktion zum Senden eines binaeren UBX-Kommandos an das U-Blox Modul (nur im Seriell-Modus)."""
@@ -52,73 +29,77 @@ class GPSReader:
         self.serial_conn.flush()
 
     def connect(self, state_dict=None):
-        if self.mode == 'network':
-            # Falls keine IP konfiguriert ist, ermitteln wir sie dynamisch
-            target_ip = self.ip if self.ip else self._get_default_gateway()
+        for port in self.ports:
             try:
-                print(f"[GPS] Verbinde mit Netzwerk-GPS-Server auf {target_ip}:{self.port}...")
-                self.socket_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.socket_conn.settimeout(5)
-                self.socket_conn.connect((target_ip, self.port))
-                print(f"[GPS] Erfolgreich verbunden mit Netzwerk-GPS auf {target_ip}:{self.port}")
+                print(f"[GPS] Versuche serielle Verbindung zu {port} mit Baudrate {self.baudrate}...")
+                self.serial_conn = serial.Serial(port, self.baudrate, timeout=2)
+                self.current_port = port
+                print(f"[GPS] Erfolgreich verbunden auf {port}")
                 if state_dict is not None:
                     state_dict['gps_connected'] = True
-                return True
-            except Exception as e:
-                print(f"[GPS] Verbindung mit Netzwerk-GPS fehlgeschlagen: {e}")
-                self.socket_conn = None
-                if state_dict is not None:
-                    state_dict['gps_connected'] = False
-                return False
-        else:
-            for port in self.ports:
+                
+                # Optimierte U-Blox NEO-7M Konfiguration (exakt wie in Worx_GPS)
                 try:
-                    self.serial_conn = serial.Serial(port, self.baudrate, timeout=2)
-                    self.current_port = port
-                    print(f"[GPS] Erfolgreich verbunden auf {port}")
-                    if state_dict is not None:
-                        state_dict['gps_connected'] = True
-                    
-                    # Optimierungen fuer u-blox NEO-7M
-                    try:
-                        nav5_payload = bytearray(36)
-                        nav5_payload[0:2] = b'\x01\x00' # mask: apply dynModel
-                        nav5_payload[2] = 4             # dynModel: 4 (Automotive)
-                        nav5_payload[3] = 3             # fixMode: 3 (Auto 2D/3D)
-                        self._send_ubx_msg(0x06, 0x24, nav5_payload)
-                        print("[GPS] UBX CFG-NAV5 (Automotive) gesendet.")
-                    except Exception as e:
-                        print(f"[GPS] Fehler bei CFG-NAV5: {e}")
+                    # 1. CFG-NAV5: Automotive Modus (DynModel 4) und 10° Elevation Maske fuer stabile Fahrtdaten
+                    nav5_payload = (
+                        b'\x11\x00'          # Mask (bit 0 & 4: DynModel & MinElev)
+                        b'\x04'              # DynModel (4 = Automotive)
+                        b'\x03'              # FixMode (3 = Auto 2D/3D)
+                        b'\x00\x00\x00\x00'  # FixedAlt
+                        b'\x00\x00\x00\x00'  # FixedAltVar
+                        b'\x0a'              # MinElev (10 Grad)
+                        b'\x00'              # DrLimit
+                        b'\x00\x00'          # pDop
+                        b'\x00\x00'          # tDop
+                        b'\x00\x00'          # pAcc
+                        b'\x00\x00'          # tAcc
+                        b'\x00'              # staticHoldThresh
+                        b'\x00'              # dgpsTimeOut
+                        b'\x00' * 12         # Reserved
+                    )
+                    self._send_ubx_msg(0x06, 0x24, nav5_payload)
+                    print("[GPS] UBX CFG-NAV5 (Automotive, 10° Elevation) gesendet.")
+                except Exception as e:
+                    print(f"[GPS] Fehler bei CFG-NAV5: {e}")
 
-                    try:
-                        payload_sbas_off = b'\x00\x00\x00\x00\x00\x00\x00\x00'
-                        self._send_ubx_msg(0x06, 0x16, payload_sbas_off)
-                        print("[GPS] UBX CFG-SBAS (Disabled) gesendet.")
-                    except Exception as e:
-                        print(f"[GPS] Fehler bei CFG-SBAS: {e}")
+                try:
+                    # 2. CFG-SBAS: SBAS/EGNOS aktivieren mit den PRNs fuer Europa (120, 121, 123, 126) fuer 1-2m Praezision
+                    sbas_payload = (
+                        b'\x01'              # mode: Enabled
+                        b'\x07'              # usage: Range + DiffCorr + Integrity
+                        b'\x03'              # maxSBAS: 3
+                        b'\x00'              # scanmode2
+                        b'\x00\x62\x00\x00'  # scanmode1: EGNOS PRNs (120, 121, 123, 126)
+                    )
+                    self._send_ubx_msg(0x06, 0x16, sbas_payload)
+                    print("[GPS] UBX CFG-SBAS (EGNOS Europe) gesendet.")
+                except Exception as e:
+                    print(f"[GPS] Fehler bei CFG-SBAS: {e}")
 
-                    try:
-                        cfg_aop_payload = b'\x01\x00\x00\x00'
-                        self._send_ubx_msg(0x06, 0x33, cfg_aop_payload)
-                        print("[GPS] UBX CFG-AOP (AssistNow Autonomous) gesendet.")
-                    except Exception as e:
-                        print(f"[GPS] Fehler bei CFG-AOP: {e}")
+                try:
+                    # 3. CFG-AOP: AssistNow Autonomous aktivieren (on-chip AGPS fuer schnellen Fix ohne Internet)
+                    aop_payload = b'\x01\x00\x00\x00'
+                    self._send_ubx_msg(0x06, 0x33, aop_payload)
+                    print("[GPS] UBX CFG-AOP (AssistNow Autonomous) gesendet.")
+                except Exception as e:
+                    print(f"[GPS] Fehler bei CFG-AOP: {e}")
 
-                    try:
-                        cfg_save_payload = b'\x00\x00\x00\x00\xff\xff\x00\x00\x00\x00\x00\x00\x01'
-                        self._send_ubx_msg(0x06, 0x09, cfg_save_payload)
-                        print("[GPS] UBX CFG-CFG (Save Config) gesendet.")
-                    except Exception as e:
-                        print(f"[GPS] Fehler bei CFG-CFG: {e}")
-                    
-                    return True
-                except serial.SerialException as e:
-                    print(f"[GPS] Fehler beim Verbindungsversuch auf {port}: {e}")
-                    
-            print(f"[GPS] FEHLER: Kein GPS-Modul unter den Ports {self.ports} gefunden.")
-            if state_dict is not None:
-                state_dict['gps_connected'] = False
-            return False
+                try:
+                    # 4. CFG-CFG: Konfiguration dauerhaft im EEPROM/Flash des Moduls sichern
+                    cfg_save_payload = b'\x00\x00\x00\x00\xff\xff\x00\x00\x00\x00\x00\x00\x01'
+                    self._send_ubx_msg(0x06, 0x09, cfg_save_payload)
+                    print("[GPS] UBX CFG-CFG (Save Config) gesendet.")
+                except Exception as e:
+                    print(f"[GPS] Fehler bei CFG-CFG: {e}")
+                
+                return True
+            except serial.SerialException as e:
+                print(f"[GPS] Fehler beim Verbindungsversuch auf {port}: {e}")
+                
+        print(f"[GPS] FEHLER: Kein GPS-Modul unter den Ports {self.ports} gefunden.")
+        if state_dict is not None:
+            state_dict['gps_connected'] = False
+        return False
 
     def _parse_nmea_line(self, line, state_dict):
         """Interne Hilfsfunktion zur Verarbeitung einer einzelnen NMEA-Zeile."""
@@ -177,63 +158,29 @@ class GPSReader:
             print(f"[GPS] Parser-Fehler: {e}")
 
     def read_data(self, state_dict):
-        """Liest kontinuierlich NMEA-Saetze (entweder aus dem Netzwerk oder seriell) und aktualisiert das state_dict."""
+        """Liest kontinuierlich NMEA-Saetze aus der seriellen Schnittstelle und aktualisiert das state_dict."""
         print(f"[GPS] Thread gestartet (Modus: {self.mode}). Suche nach Satelliten-Fix...")
         
         # Initialen Status auf False setzen
         state_dict['gps_connected'] = False
         
-        network_buffer = ""
-        
         while True:
             # 1. Sicherstellen, dass die Verbindung offen ist
-            if self.mode == 'network':
-                if not self.socket_conn:
-                    if not self.connect(state_dict):
-                        time.sleep(5)
-                        continue
-            else:
-                if not self.serial_conn or not self.serial_conn.is_open:
-                    if not self.connect(state_dict):
-                        time.sleep(5)
-                        continue
+            if not self.serial_conn or not self.serial_conn.is_open:
+                if not self.connect(state_dict):
+                    time.sleep(5)
+                    continue
 
             # 2. Daten lesen und parsen
             try:
                 # Verbindung als aktiv markieren
                 state_dict['gps_connected'] = True
                 
-                if self.mode == 'network':
-                    # Lese Datenbloecke ueber das Netzwerk-Socket
-                    data = self.socket_conn.recv(4096).decode('ascii', errors='ignore')
-                    if not data:
-                        print("[GPS] Netzwerk-Verbindung vom Smartphone getrennt.")
-                        self.socket_conn.close()
-                        self.socket_conn = None
-                        state_dict['gps_connected'] = False
-                        continue
-                    
-                    network_buffer += data
-                    while "\n" in network_buffer:
-                        line, network_buffer = network_buffer.split("\n", 1)
-                        line = line.strip()
-                        if line:
-                            self._parse_nmea_line(line, state_dict)
-                else:
-                    # Lese Zeile ueber die serielle Schnittstelle
-                    line = self.serial_conn.readline().decode('ascii', errors='replace').strip()
-                    if line:
-                        self._parse_nmea_line(line, state_dict)
+                # Lese Zeile ueber die serielle Schnittstelle
+                line = self.serial_conn.readline().decode('ascii', errors='replace').strip()
+                if line:
+                    self._parse_nmea_line(line, state_dict)
                         
-            except socket.timeout:
-                pass # Timeout ist normal bei periodischen Empfangsluecken, einfach weiterlesen
-            except socket.error as e:
-                print(f"[GPS] Netzwerk-Fehler: {e}")
-                if self.socket_conn:
-                    self.socket_conn.close()
-                self.socket_conn = None
-                state_dict['gps_connected'] = False
-                time.sleep(1)
             except serial.SerialException as e:
                 print(f"[GPS] Serielle Verbindung verloren: {e}")
                 if self.serial_conn:
