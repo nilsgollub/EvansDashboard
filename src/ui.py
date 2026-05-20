@@ -266,7 +266,7 @@ class DashboardUI:
             rect = pygame.Rect(bx - radius, by - radius, radius * 2, radius * 2)
             pygame.draw.arc(self.screen, arc_color, rect, math.radians(30), math.radians(150), 2)
 
-    def render(self, current_speed, speed_limit, sats, road_type, altitude, heading, is_simulated=True, has_fix=True, weather_temp=None, weather_desc=None, wifi_ssid=None, wifi_signal=0, version=None, dim_factor=1.0):
+    def render(self, current_speed, speed_limit, sats, road_type, altitude, heading, is_simulated=True, has_fix=True, weather_temp=None, weather_desc=None, wifi_ssid=None, wifi_signal=0, version=None, dim_factor=1.0, gps_connected=False):
         self.screen.fill(self.COLOR_BG)
         
         # --- 1. TOP BAR (Höhe: 45px) ---
@@ -312,6 +312,12 @@ class DashboardUI:
             text_color = (240, 140, 40)
             status_text = "SIMULATOR"
             dot_color = (220, 100, 20)
+        elif not gps_connected:
+            bg_color = (30, 30, 35)
+            border_color = (70, 70, 80)
+            text_color = (130, 130, 140)
+            status_text = "KEIN SENSOR"
+            dot_color = (100, 100, 110)
         elif not has_fix:
             bg_color = (25, 30, 40)
             border_color = (60, 120, 220)

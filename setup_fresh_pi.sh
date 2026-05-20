@@ -164,6 +164,10 @@ sudo sed -i "s/Group=nilsgollub/Group=$CURRENT_USER/g" "$SERVICE_DEST"
 sudo systemctl daemon-reload
 sudo systemctl enable evans-dashboard.service
 
+# Benutzer zur dialout-Gruppe hinzufügen, um serielle Rechte zu gewähren
+echo -e "${YELLOW}Fuege Benutzer '$CURRENT_USER' zur 'dialout'-Gruppe fuer serielle Schnittstellen hinzu...${NC}"
+sudo usermod -a -G dialout "$CURRENT_USER" || true
+
 # ==============================================================================
 # WLAN / Hotspot-Konfiguration
 # ==============================================================================

@@ -51,7 +51,7 @@ class GPSReader:
         self.serial_conn.write(packet)
         self.serial_conn.flush()
 
-    def connect(self):
+    def connect(self, state_dict=None):
         if self.mode == 'network':
             # Falls keine IP konfiguriert ist, ermitteln wir sie dynamisch
             target_ip = self.ip if self.ip else self._get_default_gateway()
@@ -61,10 +61,14 @@ class GPSReader:
                 self.socket_conn.settimeout(5)
                 self.socket_conn.connect((target_ip, self.port))
                 print(f"[GPS] Erfolgreich verbunden mit Netzwerk-GPS auf {target_ip}:{self.port}")
+                if state_dict is not None:
+                    state_dict['gps_connected'] = True
                 return True
             except Exception as e:
                 print(f"[GPS] Verbindung mit Netzwerk-GPS fehlgeschlagen: {e}")
                 self.socket_conn = None
+                if state_dict is not None:
+                    state_dict['gps_connected'] = False
                 return False
         else:
             for port in self.ports:
@@ -72,6 +76,8 @@ class GPSReader:
                     self.serial_conn = serial.Serial(port, self.baudrate, timeout=2)
                     self.current_port = port
                     print(f"[GPS] Erfolgreich verbunden auf {port}")
+                    if state_dict is not None:
+                        state_dict['gps_connected'] = True
                     
                     # Optimierungen fuer u-blox NEO-7M
                     try:
@@ -106,10 +112,12 @@ class GPSReader:
                         print(f"[GPS] Fehler bei CFG-CFG: {e}")
                     
                     return True
-                except serial.SerialException:
-                    pass
+                except serial.SerialException as e:
+                    print(f"[GPS] Fehler beim Verbindungsversuch auf {port}: {e}")
                     
             print(f"[GPS] FEHLER: Kein GPS-Modul unter den Ports {self.ports} gefunden.")
+            if state_dict is not None:
+                state_dict['gps_connected'] = False
             return False
 
     def _parse_nmea_line(self, line, state_dict):
@@ -172,23 +180,29 @@ class GPSReader:
         """Liest kontinuierlich NMEA-Saetze (entweder aus dem Netzwerk oder seriell) und aktualisiert das state_dict."""
         print(f"[GPS] Thread gestartet (Modus: {self.mode}). Suche nach Satelliten-Fix...")
         
+        # Initialen Status auf False setzen
+        state_dict['gps_connected'] = False
+        
         network_buffer = ""
         
         while True:
             # 1. Sicherstellen, dass die Verbindung offen ist
             if self.mode == 'network':
                 if not self.socket_conn:
-                    if not self.connect():
+                    if not self.connect(state_dict):
                         time.sleep(5)
                         continue
             else:
                 if not self.serial_conn or not self.serial_conn.is_open:
-                    if not self.connect():
+                    if not self.connect(state_dict):
                         time.sleep(5)
                         continue
 
             # 2. Daten lesen und parsen
             try:
+                # Verbindung als aktiv markieren
+                state_dict['gps_connected'] = True
+                
                 if self.mode == 'network':
                     # Lese Datenbloecke ueber das Netzwerk-Socket
                     data = self.socket_conn.recv(4096).decode('ascii', errors='ignore')
@@ -196,6 +210,7 @@ class GPSReader:
                         print("[GPS] Netzwerk-Verbindung vom Smartphone getrennt.")
                         self.socket_conn.close()
                         self.socket_conn = None
+                        state_dict['gps_connected'] = False
                         continue
                     
                     network_buffer += data
@@ -217,13 +232,16 @@ class GPSReader:
                 if self.socket_conn:
                     self.socket_conn.close()
                 self.socket_conn = None
+                state_dict['gps_connected'] = False
                 time.sleep(1)
             except serial.SerialException as e:
                 print(f"[GPS] Serielle Verbindung verloren: {e}")
                 if self.serial_conn:
                     self.serial_conn.close()
                 self.serial_conn = None
+                state_dict['gps_connected'] = False
                 time.sleep(1)
             except Exception as e:
                 print(f"[GPS] Unerwarteter Fehler im Reader: {e}")
+                state_dict['gps_connected'] = False
                 time.sleep(1)

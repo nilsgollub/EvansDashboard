@@ -34,10 +34,11 @@ current_state = {
     'lon': 7.152,
     'last_update': 0.0,  # Timestamp des letzten echten GPS-Updates
     'wifi_ssid': None,   # Aktuell verbundenes WLAN
-    'wifi_signal': 0,    # Signalstärke in % (0-100)
+    'wifi_signal': 0,    # Signalstaerke in % (0-100)
     'weather_temp': None,
     'weather_desc': None,
-    'dim_factor': 1.0    # Dynamischer Dimmfaktor (1.0 = voll, 0.15 = gedimmt)
+    'dim_factor': 1.0,   # Dynamischer Dimmfaktor (1.0 = voll, 0.15 = gedimmt)
+    'gps_connected': False # Zeigt an, ob das GPS-Modul oder der Netzwerk-Server verbunden ist
 }
 
 # --- Hardware Backlight-Steuerung ---
@@ -399,7 +400,7 @@ def main():
                 current_state['dim_factor'] = 1.0
                 set_hardware_backlight(1.0)
         
-        # Aktuellen State an UI übergeben (inkl. Dimmfaktor)
+        # Aktuellen State an UI uebergeben (inkl. Dimmfaktor)
         ui.render(
             current_speed=current_state['speed'],
             speed_limit=current_state['limit'],
@@ -414,7 +415,8 @@ def main():
             wifi_ssid=current_state.get('wifi_ssid'),
             wifi_signal=current_state.get('wifi_signal', 0),
             version=VERSION,
-            dim_factor=dim_factor
+            dim_factor=dim_factor,
+            gps_connected=current_state.get('gps_connected', False)
         )
         
         # 30 Frames per Second
