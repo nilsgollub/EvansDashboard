@@ -44,10 +44,14 @@ def run_ssh_commands(host, username, password, commands):
             
             try:
                 # Read output in real-time
+                sudo_prompt_seen = False
                 while True:
                     if channel.recv_ready():
                         output = channel.recv(1024).decode('utf-8', errors='ignore')
                         safe_write(output)
+                        if "password for" in output.lower() and not sudo_prompt_seen:
+                            channel.send(password + '\n')
+                            sudo_prompt_seen = True
                     
                     if channel.exit_status_ready():
                         break
@@ -84,23 +88,11 @@ if __name__ == "__main__":
     username = sys.argv[2]
     password = sys.argv[3]
     
-    # We will run:
-    # 0. Recovery commands to clean up locks from previous interrupted runs
-    # 1. Update git repo
-    # 2. Run the setup script!
     commands = [
-        "sudo killall -9 apt apt-get dpkg 2>/dev/null || true",
-        "sudo rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock",
-        "sudo dpkg --configure -a",
-        "cd ~/EvansDashboard && git reset --hard && git pull && chmod +x setup_fresh_pi.sh"
+        "ls -lh ~/EvansDashboard/switzerland_roads.db",
+        "sudo systemctl status evans-dashboard.service --no-pager || true",
+        "tail -n 50 ~/dashboard.log || true",
+        "tail -n 30 ~/git_pull.log || true"
     ]
-    
-    setup_cmd = "cd ~/EvansDashboard && ./setup_fresh_pi.sh --non-interactive --reboot"
-    if len(sys.argv) >= 6:
-        ssid = sys.argv[4]
-        pw = sys.argv[5]
-        setup_cmd += f" --hotspot-ssid '{ssid}' --hotspot-pw '{pw}'"
-        
-    commands.append(setup_cmd)
     
     run_ssh_commands(host, username, password, commands)
