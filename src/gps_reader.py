@@ -137,7 +137,9 @@ class GPSReader:
         print(f"[GPS] FEHLER: Kein GPS-Modul unter den Ports {self.ports} gefunden.")
         if state_dict is not None:
             state_dict['gps_connected'] = False
-        return False    def _parse_nmea_line(self, line, state_dict):
+        return False
+
+    def _parse_nmea_line(self, line, state_dict):
         """Interne Hilfsfunktion zur Verarbeitung einer einzelnen NMEA-Zeile."""
         try:
             # Wir prüfen nur den Suffix (z.B. RMC), um alle Konstellationen ($GP, $GN, $GL) zu matchen.
