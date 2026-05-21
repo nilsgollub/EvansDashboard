@@ -137,58 +137,60 @@ class GPSReader:
         print(f"[GPS] FEHLER: Kein GPS-Modul unter den Ports {self.ports} gefunden.")
         if state_dict is not None:
             state_dict['gps_connected'] = False
-        return False
-
-    def _parse_nmea_line(self, line, state_dict):
+        return False    def _parse_nmea_line(self, line, state_dict):
         """Interne Hilfsfunktion zur Verarbeitung einer einzelnen NMEA-Zeile."""
         try:
-            # RMC (Recommended Minimum Navigation Information) liefert uns Geschwindigkeit & Position
-            if line.startswith('$GPRMC') or line.startswith('$GNRMC'):
-                msg = pynmea2.parse(line)
-                if msg.status == 'A':  # 'A' bedeutet "Active" / Data Valid
-                    speed_kmh = float(msg.spd_over_grnd) * 1.852
-                    state_dict['speed'] = speed_kmh
-                    state_dict['lat'] = msg.latitude
-                    state_dict['lon'] = msg.longitude
-                    state_dict['last_update'] = time.time()
-                    if hasattr(msg, 'track') and msg.track is not None:
+            # Wir prüfen nur den Suffix (z.B. RMC), um alle Konstellationen ($GP, $GN, $GL) zu matchen.
+            if len(line) >= 6 and line.startswith('$'):
+                msg_type = line[3:6]
+                
+                # RMC (Recommended Minimum Navigation Information) liefert uns Geschwindigkeit & Position
+                if msg_type == 'RMC':
+                    msg = pynmea2.parse(line)
+                    if msg.status == 'A':  # 'A' bedeutet "Active" / Data Valid
+                        speed_kmh = float(msg.spd_over_grnd) * 1.852
+                        state_dict['speed'] = speed_kmh
+                        state_dict['lat'] = msg.latitude
+                        state_dict['lon'] = msg.longitude
+                        state_dict['last_update'] = time.time()
+                        if hasattr(msg, 'track') and msg.track is not None:
+                            try:
+                                state_dict['heading'] = float(msg.track)
+                            except (ValueError, TypeError):
+                                pass
+                        print(f"[GPS] RMC Update -> Speed: {speed_kmh:.1f} km/h, Pos: {msg.latitude:.4f}, {msg.longitude:.4f}, Course: {state_dict.get('heading', 0.0)}°")
+                    else:
+                        print("[GPS] Suche nach Satelliten... (Noch kein GPS-Fix)")
+                        
+                # GGA (Global Positioning System Fix Data) liefert uns Fix-Qualitaet & Hoehe
+                elif msg_type == 'GGA':
+                    msg = pynmea2.parse(line)
+                    if msg.gps_qual > 0:
                         try:
-                            state_dict['heading'] = float(msg.track)
+                            state_dict['altitude'] = float(msg.altitude)
                         except (ValueError, TypeError):
                             pass
-                    print(f"[GPS] RMC Update -> Speed: {speed_kmh:.1f} km/h, Pos: {msg.latitude:.4f}, {msg.longitude:.4f}, Course: {state_dict.get('heading', 0.0)}°")
-                else:
-                    print("[GPS] Suche nach Satelliten... (Noch kein GPS-Fix)")
-                    
-            # GGA (Global Positioning System Fix Data) liefert uns Fix-Qualitaet & Hoehe
-            elif line.startswith('$GPGGA') or line.startswith('$GNGGA'):
-                msg = pynmea2.parse(line)
-                if msg.gps_qual > 0:
-                    try:
-                        state_dict['altitude'] = float(msg.altitude)
-                    except (ValueError, TypeError):
-                        pass
-                    try:
-                        if msg.num_sats:
-                            state_dict['sats'] = int(msg.num_sats)
-                    except (ValueError, TypeError):
-                        pass
-                    state_dict['last_update'] = time.time()
-                    print(f"[GPS] GGA Update -> Sats: {msg.num_sats}, Alt: {msg.altitude}m")
+                        try:
+                            if msg.num_sats:
+                                state_dict['sats'] = int(msg.num_sats)
+                        except (ValueError, TypeError):
+                            pass
+                        state_dict['last_update'] = time.time()
+                        print(f"[GPS] GGA Update -> Sats: {msg.num_sats}, Alt: {msg.altitude}m")
 
-            # GSV (GPS Satellites in View) – zeigt sichtbare Satelliten AUCH OHNE FIX
-            elif line.startswith('$GPGSV') or line.startswith('$GNGSV'):
-                msg = pynmea2.parse(line)
-                if hasattr(msg, 'msg_num') and str(msg.msg_num) == '1':
-                    try:
-                        sats_in_view = int(msg.num_sv_in_view)
-                        # GSV ueberschreibt die Sat-Zahl nur, wenn KEIN Fix vorliegt.
-                        if state_dict.get('last_update', 0.0) == 0.0 or \
-                           (time.time() - state_dict.get('last_update', 0.0)) >= 10.0:
-                            state_dict['sats'] = sats_in_view
-                        print(f"[GPS] GSV -> Satelliten in Sicht: {sats_in_view}")
-                    except (ValueError, TypeError, AttributeError):
-                        pass
+                # GSV (GPS Satellites in View) – zeigt sichtbare Satelliten AUCH OHNE FIX
+                elif msg_type == 'GSV':
+                    msg = pynmea2.parse(line)
+                    if hasattr(msg, 'msg_num') and str(msg.msg_num) == '1':
+                        try:
+                            sats_in_view = int(msg.num_sv_in_view)
+                            # GSV ueberschreibt die Sat-Zahl nur, wenn KEIN Fix vorliegt.
+                            if state_dict.get('last_update', 0.0) == 0.0 or \
+                               (time.time() - state_dict.get('last_update', 0.0)) >= 10.0:
+                                state_dict['sats'] = sats_in_view
+                            print(f"[GPS] GSV ({line[1:3]}) -> Satelliten in Sicht: {sats_in_view}")
+                        except (ValueError, TypeError, AttributeError):
+                            pass
                     
         except pynmea2.ParseError:
             pass # Parse Errors passieren manchmal bei unvollstaendigen Saetzen
