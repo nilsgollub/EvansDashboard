@@ -95,10 +95,10 @@ class GPSReader:
                     print(f"[GPS] Fehler bei CFG-GNSS/SBAS: {e}")
 
                 try:
-                    # 3. CFG-RATE: Update-Rate auf 5 Hz (200 ms) erhoehen fuer butterweichen Tacho
-                    rate_payload = b'\xc8\x00\x01\x00\x00\x00' # 200 ms
+                    # 3. CFG-RATE: Update-Rate auf 2 Hz (500 ms) setzen. 5 Hz führt bei NEO-7M zu Pufferüberläufen!
+                    rate_payload = b'\xf4\x01\x01\x00\x00\x00' # 500 ms
                     self._send_ubx_msg(0x06, 0x08, rate_payload)
-                    print("[GPS] UBX CFG-RATE (5 Hz) gesendet.")
+                    print("[GPS] UBX CFG-RATE (2 Hz) gesendet.")
                 except Exception as e:
                     print(f"[GPS] Fehler bei CFG-RATE: {e}")
 

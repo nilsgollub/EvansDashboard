@@ -52,8 +52,9 @@ def main():
         sbas_off_payload = b'\x00\x00\x00\x00\x00\x00\x00\x00'
         send_ubx_msg(serial_conn, 0x06, 0x16, sbas_off_payload)
         
-        # 3. RATE 5Hz
-        send_ubx_msg(serial_conn, 0x06, 0x08, b'\xc8\x00\x01\x00\x00\x00')
+        # 3. CFG-RATE: Update-Rate auf 2 Hz (500 ms) setzen
+        rate_payload = b'\xf4\x01\x01\x00\x00\x00' # 500 ms
+        send_ubx_msg(serial_conn, 0x06, 0x08, rate_payload)
         
         # 4. MSG Filter
         send_ubx_msg(serial_conn, 0x06, 0x01, b'\xf0\x01\x00\x00\x00\x00\x00\x00') # GLL off
