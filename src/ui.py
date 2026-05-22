@@ -14,7 +14,7 @@ class DashboardUI:
         pygame.display.set_caption("Evans Co-Pilot Dashboard")
         
         # Initialisiere Fonts
-        self.font_speed = pygame.font.SysFont('arial', 150, bold=True)
+        self.font_speed = pygame.font.SysFont('arial', 150, bold=False)
         self.font_limit = pygame.font.SysFont('arial', 80, bold=True)
         self.font_info = pygame.font.SysFont('arial', 22)
         self.font_compass = pygame.font.SysFont('arial', 14, bold=True)
@@ -373,7 +373,7 @@ class DashboardUI:
         
         # "km/h" Anzeige rechtsbündig unter der Geschwindigkeit
         kmh_surface = self.font_info.render("km/h", True, self.COLOR_GRAY)
-        kmh_rect = kmh_surface.get_rect(topright=(self.width - 35, speed_rect.bottom - 25))
+        kmh_rect = kmh_surface.get_rect(topright=(self.width - 35, speed_rect.bottom - 5))
         self.screen.blit(kmh_surface, kmh_rect)
         
         # 2.3 Versionsanzeige knapp über der unteren Leiste ganz rechts
