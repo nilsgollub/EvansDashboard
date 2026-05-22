@@ -48,7 +48,7 @@ The script downloads `switzerland-latest.osm.pbf` from Geofabrik and parses it i
 
 ## Architecture
 
-The app uses five daemon threads plus the main UI thread, all sharing a single dict (`current_state` in `src/main.py`) for lock-free inter-thread communication. Python's GIL makes individual dict key writes atomic.
+The app uses five daemon threads plus the main UI thread, all sharing a single dict (current_state in src/main.py) for inter-thread communication. While individual dict key assignments are atomic in CPython, related updates (like lat/lon) are not synchronized; use a threading.Lock if strict consistency is required.
 
 | Thread | Module | What it does |
 |---|---|---|
