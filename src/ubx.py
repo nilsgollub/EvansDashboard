@@ -98,7 +98,7 @@ def configure_neo7m(serial_conn, log=print):
     steps = [
         (0x06, 0x24, NAV5_PAYLOAD, "CFG-NAV5 (Automotive, 10 Grad Elevation)"),
         (0x06, 0x16, SBAS_OFF_PAYLOAD, "CFG-SBAS (aus)"),
-        (0x06, 0x3E, GNSS_PAYLOAD, "CFG-GNSS (GPS+GLONASS)"),
+        # (0x06, 0x3E, GNSS_PAYLOAD, "CFG-GNSS (GPS+GLONASS)"), # Disabled: Neo-7M does not support concurrent GPS+GLONASS
         (0x06, 0x08, RATE_PAYLOAD, "CFG-RATE (2 Hz)"),
         (0x06, 0x01, MSG_GLL_OFF, "CFG-MSG (GLL off)"),
         (0x06, 0x01, MSG_GSA_OFF, "CFG-MSG (GSA off)"),
