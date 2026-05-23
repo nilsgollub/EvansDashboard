@@ -165,8 +165,6 @@ Der NetworkManager speichert beide Verbindungen als Profile unter `/etc/NetworkM
 
 ---
 
----
-
 ## 🛠️ Fehlerbehebung & Logging
 
 Um im laufenden Betrieb Fehler zu diagnostizieren, werden alle Ausgaben und Exceptions in der Datei `~/dashboard.log` protokolliert.
