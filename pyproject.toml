@@ -1,0 +1,22 @@
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+# Bewusst fokussierter Regelsatz: echte Fehlerquellen (F), grobe Stil-/Syntaxfehler (E/W),
+# Import-Sortierung (I). Aggressivere Regeln bleiben aussen vor, um den Bestand nicht umzuschreiben.
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",  # Zeilenlaenge wird von black gesteuert
+    "E741",  # mehrdeutige Variablennamen im Bestand (z.B. l)
+]
+
+[tool.pytest.ini_options]
+# src/ auf den Importpfad legen, damit Tests die Module flach importieren koennen
+# (genau wie main.py es zur Laufzeit tut).
+pythonpath = ["src"]
+testpaths = ["tests"]

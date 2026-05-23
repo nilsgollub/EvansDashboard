@@ -1,4 +1,5 @@
 import os
+
 import pygame
 
 drivers = ["x11", "kmsdrm", "directfb", "fbcon", "dummy", "offscreen", "wayland"]
@@ -9,7 +10,7 @@ for d in drivers:
         pygame.display.init()
         valid.append(d)
         pygame.display.quit()
-    except Exception as e:
+    except Exception:
         pass
 
 print("AVAILABLE DRIVERS:", valid)
