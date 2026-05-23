@@ -58,3 +58,7 @@ dashboard.log
 *.osm.pbf
 *.db
 
+# Secrets / lokale Zugangsdaten (niemals committen)
+.env
+scratch/secrets*
+
