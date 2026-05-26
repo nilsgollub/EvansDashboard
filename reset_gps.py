@@ -23,44 +23,27 @@ def main():
     for port in ports:
         for baud in baudrates:
             try:
-                print(f"Versuche serielle Verbindung zu {port} mit {baud} baud...")
-                s = serial.Serial(port, baud, timeout=1)
-                # Teste ob Daten kommen
-                line = s.readline()
-                if line:
-                    serial_conn = s
-                    print(f"--> Erfolgreich verbunden auf {port} bei {baud} baud!\n")
-                    break
-                else:
-                    s.close()
+                s = serial.Serial(port, baud, timeout=0.1)
+                
+                # Sende Factory Reset Kommando (Revert to default) an diesen Port/Baud
+                reset_payload = (
+                    b'\xff\xff\x00\x00'  # clearMask
+                    b'\x00\x00\x00\x00'  # saveMask
+                    b'\xff\xff\x00\x00'  # loadMask
+                    b'\x07'              # deviceMask
+                )
+                packet = build_ubx_packet(0x06, 0x09, reset_payload)
+                s.write(packet)
+                s.flush()
+                s.close()
+                print(f"--> Blindes Reset-Kommando an {port} bei {baud} baud gesendet.")
             except Exception:
                 pass
-        if serial_conn:
-            break
 
-    if not serial_conn:
-        print("\n[FEHLER] Konnte kein aktives GPS Modul finden.")
-        sys.exit(1)
-
-    print("Sende Factory Reset Kommando (Revert to default)...")
-    try:
-        # CFG-CFG: Clear Mask=0xFFFF, Save Mask=0x0000, Load Mask=0xFFFF, Device Mask=0x07 (BBR, Flash, EEPROM)
-        reset_payload = (
-            b'\xff\xff\x00\x00'  # clearMask
-            b'\x00\x00\x00\x00'  # saveMask
-            b'\xff\xff\x00\x00'  # loadMask
-            b'\x07'              # deviceMask
-        )
-        packet = build_ubx_packet(0x06, 0x09, reset_payload)
-        serial_conn.write(packet)
-        serial_conn.flush()
-        print("Kommando erfolgreich gesendet!")
-        print("Warte 2 Sekunden...")
-        time.sleep(2)
-        print("Das GPS-Modul ist jetzt im Werkszustand (9600 Baud, 1 Hz).")
-        print("Du kannst das Dashboard jetzt normal starten.")
-    except Exception as e:
-        print(f"Fehler: {e}")
+    print("\nAlle Reset-Kommandos wurden abgesetzt!")
+    print("Warte 2 Sekunden, bis das Modul (hoffentlich) neustartet...")
+    time.sleep(2)
+    print("Das GPS-Modul sollte jetzt im Werkszustand (9600 Baud, 1 Hz) sein.")
 
 if __name__ == '__main__':
     main()
