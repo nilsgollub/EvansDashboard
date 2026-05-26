@@ -146,13 +146,24 @@ Ab Raspberry Pi OS (Bookworm) wird standardmäßig **NetworkManager** anstelle v
 
 ### WLAN-Verbindungen einrichten und verwalten
 
-1. **Heim-WLAN verbinden:**
+Die einfachste Methode ist die Nutzung des mitgelieferten WiFi-Priorisierungsskripts `setup_wifi.sh`, das automatisch beide Netze einrichtet und dem Heimnetzwerk (`Skynet`) eine höhere Priorität zuweist als dem mobilen Hotspot (`NiniHotspot`):
+
+```bash
+# WLAN-Verbindungen mit vordefinierten Prioritäten einrichten
+./setup_wifi.sh
+```
+
+Alternativ können die Verbindungen manuell über `nmcli` konfiguriert werden:
+
+1. **Heim-WLAN verbinden (höhere Priorität, z.B. 10):**
    ```bash
    sudo nmcli device wifi connect "Skynet" password "DeinSkynetPasswort"
+   sudo nmcli connection modify "Skynet" connection.autoconnect-priority 10
    ```
-2. **Handy-Hotspot verbinden (als Fallback für unterwegs):**
+2. **Handy-Hotspot verbinden (niedrigere Priorität, z.B. 5):**
    ```bash
    sudo nmcli device wifi connect "NiniHotspot" password "DeinHotspotPasswort"
+   sudo nmcli connection modify "NiniHotspot" connection.autoconnect-priority 5
    ```
 
 ### Wie funktioniert der automatische Wechsel?
@@ -165,23 +176,36 @@ Der NetworkManager speichert beide Verbindungen als Profile unter `/etc/NetworkM
 
 ---
 
-## 🛠️ Fehlerbehebung & Logging
+## 🛠️ Fehlerbehebung, Diagnose & Tools
 
-Um im laufenden Betrieb Fehler zu diagnostizieren, werden alle Ausgaben und Exceptions in der Datei `~/dashboard.log` protokolliert.
+Um Fehler im laufenden Betrieb oder bei der GPS-Kompatibilität zu beheben, stehen verschiedene Diagnosewerkzeuge bereit.
+
+### GPS-Diagnosetool (test_gps.py)
+Wenn das Dashboard nicht startet oder das GPS-Signal unklar ist, kann der serielle Datenstrom inklusive der UBX-Optimierungssequenz aus `src/ubx.py` isoliert getestet werden:
+```bash
+# Virtuelle Umgebung aktivieren und Diagnose ausführen
+source .venv/bin/activate
+python test_gps.py
+```
+Das Skript scannt automatisch nach dem GPS-Modul an `/dev/ttyACM0`, `/dev/ttyUSB0` und `/dev/serial0`, wendet die Konfiguration an und gibt die rohen sowie geparsten NMEA-Zeilen aus (inklusive Satellitenanzahl und Signalstärken).
+
+### GPS-Werksreset (reset_gps.py)
+Falls durch Fehlkonfigurationen (z. B. Aktivierung unvollständiger GNSS-Konstellationen oder falsche Genauigkeitsfilter) die interne Fix-Engine des U-blox NEO-7M blockiert ist (Symptom: dauerhaft 1 Satellit oder kein Fix trotz freiem Himmel und Satelliten in Sicht), kann das Modul in den Werkszustand (9600 Baud, 1 Hz) zurückgesetzt werden:
+```bash
+python reset_gps.py
+```
+Dieses Skript sendet ein blindes `CFG-CFG` Factory-Reset-Paket an alle gängigen seriellen Ports und Baudraten, um die korrupte Konfiguration aus dem NVRAM/Flash-Speicher des Moduls zu löschen.
 
 ### Log-Datei live mitlesen:
+Die Hauptanwendung schreibt detaillierte Protokolle in `~/dashboard.log`. Du kannst diese live überwachen:
 ```bash
 tail -f ~/dashboard.log
 ```
-
-### Typische Statusmeldungen im Log:
-*   `[GPS] Erfolgreich verbunden auf /dev/serial0`: Die Hardwareverbindung zum GPS-Empfänger steht.
-*   `[GPS] Suche nach Satelliten... (Noch kein GPS-Fix)`: Die Verbindung steht, aber es wird noch nach freier Sicht zum Himmel gesucht. Das ist im Haus normal und verschwindet nach wenigen Minuten unter freiem Himmel.
-*   `[API] Frage Overpass API...`: Die Overpass-API wird erfolgreich abgefragt und gibt aktuelle Tempolimits zurück.
 
 ---
 
 ## 📜 Lizenz
 Dieses Projekt ist für den privaten Gebrauch lizenziert.
 
-*Viel Spaß auf der Straße, Evan!* 🏎️💨
+*Viel Spass auf der Strasse, Evan!* 🏎️💨
+

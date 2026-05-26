@@ -38,7 +38,7 @@ Das Gehäuse sollte abgerundete Ecken haben und robust genug sein, um Kinderhän
 
 Das System läuft headless unter Raspberry Pi OS und startet das Dashboard automatisch beim Booten. Die Software wird in Python geschrieben und nutzt Multithreading für einen flüssigen Betrieb.
 
-Thread 1 (GPS-Erfassung): Liest kontinuierlich (mehrmals pro Sekunde) die NMEA-Daten ($GPRMC, $GPGGA) des U-BLOX NEO-7M über die serielle USB-Schnittstelle aus. Bei jedem Start wird das Modul durch proprietäre binäre UBX-Befehle hochoptimiert konfiguriert (Automotive Dynamic Mode, GLONASS an / SBAS aus, AssistNow Autonomous AOP für schnellste Fix-Zeiten und permanenter NVRAM Save). Er extrahiert die aktuelle Geschwindigkeit über Grund, GPS-Koordinaten, Anzahl der Satelliten, Kurs und Höhe.
+Thread 1 (GPS-Erfassung): Liest kontinuierlich (mehrmals pro Sekunde) die NMEA-Daten ($GPRMC, $GPGGA) des U-BLOX NEO-7M über die serielle USB-Schnittstelle aus. Bei jedem Start wird das Modul durch proprietäre binäre UBX-Befehle hochoptimiert konfiguriert (Automotive Dynamic Mode, GPS-only [NEO-7M unterstützt kein concurrent GLONASS] / SBAS aus, AssistNow Autonomous AOP für schnellste Fix-Zeiten und permanenter NVRAM Save). Er extrahiert die aktuelle Geschwindigkeit über Grund, GPS-Koordinaten, Anzahl der Satelliten, Kurs und Höhe.
 
 Thread 2 (Simulations-Fallschirm): Überwacht den Signal-Status. Sollte für mehr als 10 Sekunden kein GPS-Fix vorliegen, springt automatisch eine hochrealistische Bewegungssimulation entlang einer vordefinierten Marly-Route ein. Bei erneutem Hardware-Signalempfang erfolgt ein nahtloser Rückwechsel.
 

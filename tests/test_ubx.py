@@ -47,8 +47,8 @@ def test_nav5_payload_is_36_bytes():
 def test_configure_neo7m_sends_full_sequence():
     fake = FakeSerial()
     ubx.configure_neo7m(fake, log=None)
-    # 10 Konfigurationsschritte (NAV5, SBAS, GNSS, RATE, 4x MSG, AOP, CFG)
-    assert len(fake.writes) == 10
+    # 9 Konfigurationsschritte (NAV5, SBAS, RATE, 4x MSG, AOP, CFG - GNSS ist deaktiviert)
+    assert len(fake.writes) == 9
     # Jedes Paket beginnt mit den UBX-Sync-Bytes
     assert all(pkt[:2] == b"\xb5\x62" for pkt in fake.writes)
 

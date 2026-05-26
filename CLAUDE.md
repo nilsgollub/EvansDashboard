@@ -52,7 +52,7 @@ The app uses five daemon threads plus the main UI thread, all sharing a single d
 
 | Thread | Module | What it does |
 |---|---|---|
-| GPS | `src/gps_reader.py` | Reads NMEA sentences from serial port; on connect, sends binary UBX commands to configure the U-BLOX NEO-7M chip (Automotive mode, GPS+GLONASS, 2 Hz, SBAS off, AssistNow AOP). Writes `speed`, `lat`, `lon`, `heading`, `altitude`, `sats`, `last_update`, `gps_connected` to state. |
+| GPS | `src/gps_reader.py` | Reads NMEA sentences from serial port; on connect, sends binary UBX commands to configure the U-BLOX NEO-7M chip (Automotive mode, GPS-only [NEO-7M does not support concurrent GPS+GLONASS], 2 Hz, SBAS off, AssistNow AOP). Writes `speed`, `lat`, `lon`, `heading`, `altitude`, `sats`, `last_update`, `gps_connected` to state. |
 | Simulation | `src/main.py:run_simulation` | Activates automatically if `SIMULATOR_ENABLED = True` and no real GPS fix for >10 s. Drives a loop route around Marly (Fribourg) and writes the same state keys as the GPS thread. |
 | Speed limit | `src/osm_api.py:get_speed_limit` | Polls every 10 s. Tries `switzerland_roads.db` at progressive radii (30 m → 80 m → 150 m), then falls back to Overpass API. Writes `limit` and `road_type` to state. |
 | Weather | `src/main.py:fetch_weather_data` | Polls Open-Meteo every 15 min using current GPS coords. Writes `weather_temp` and `weather_desc` (key strings like `"sun"`, `"rain"`) to state. |
@@ -99,3 +99,33 @@ sudo systemctl enable evans-dashboard.service
 Run `setup_fresh_pi.sh` on a fresh Raspberry Pi OS Lite install to automate the full setup (UART, display overlay, venv, systemd service, WLAN hotspot).
 
 Logs are written to `~/dashboard.log`. Monitor live with `tail -f ~/dashboard.log`.
+
+## Diagnostic & Helper Scripts
+
+- `test_gps.py`: Simples GPS-Diagnose- und Test-Skript. Liest die serielle Schnittstelle aus, sendet die UBX-Konfigurationssequenz aus `src/ubx.py` und gibt NMEA-Zeilen geparst auf stdout aus. Ideal zum Testen ohne Pygame.
+- `reset_gps.py`: Ein Blind-Recovery-Skript zur Wiederherstellung des Werkszustands (9600 Baud, 1 Hz) über serielle Ports, indem ein `CFG-CFG`-Reset an diverse Schnittstellen und Baudraten gesendet wird.
+- `setup_wifi.sh`: Bash-Skript zur Konfiguration von WiFi-Fallbacks und Autoconnect-Prioritäten über `nmcli` (Heim-WLAN `Skynet` = Priorität 10, Handy-Hotspot `NiniHotspot` = Priorität 5).
+
+## Testing, Linting & Formatting
+
+Use the following commands from the repository root:
+
+```bash
+# Run pytest test suite
+pytest
+
+# Ruff check (linting)
+ruff check .
+
+# Black (formatting check / format)
+black --check .
+black .
+```
+
+## Hardware Quirks & Gotchas
+
+- **U-blox NEO-7M - No Concurrent GNSS**: Der NEO-7M Chip unterstützt **keinen** gleichzeitigen GPS- und GLONASS-Betrieb. Das Senden eines `CFG-GNSS`-Konfigurationspakets, das beide Netze aktiviert, kann zum Hängenbleiben führen. In `src/ubx.py` muss das Senden von `GNSS_PAYLOAD` auskommentiert bleiben.
+- **CFG-NAV5 `pAcc` Trap**: Beim Konfigurieren von `CFG-NAV5` darf das Bit 4 (Position Mask) **nicht** gesetzt werden, wenn `pAcc` mit `0` belegt ist. Dies zwingt das GPS-Modul, auf eine physikalisch unmögliche Präzision von 0,0 Metern zu warten, wodurch das Modul niemals einen GPS-Fix deklariert (obwohl 12+ Satelliten in Sicht sind). Verwende immer die Maske `\x01\x00` (nur Dynamic Model Bit 0 aktiv).
+- **Konfigurationspersistenz**: Einstellungen werden über `CFG-CFG` (Save Config) permanent in den Flash-Speicher des GPS-Moduls geschrieben und überleben Power-Cycles. Wenn fehlerhafte Werte eingespielt wurden, muss `reset_gps.py` zur Bereinigung ausgeführt werden.
+- **WLAN-Frequenzband Pi Zero 2 W**: Der Raspberry Pi Zero 2 W besitzt ausschließlich ein **2,4 GHz** Funkmodul. Er kann 5-GHz-Netzwerke physikalisch nicht sehen. Daher müssen eventuelle Smartphone-Hotspots zwingend auf 2,4 GHz (z. B. Option "Maximale Kompatibilität" bei iPhones) eingestellt werden.
+
