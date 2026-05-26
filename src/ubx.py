@@ -27,9 +27,9 @@ def send_ubx_msg(serial_conn, msg_class, msg_id, payload):
 
 # --- NEO-7M Konfigurations-Payloads (Reihenfolge ist relevant) ---
 
-# 1. CFG-NAV5: Automotive-Modus (DynModel 4) und 10 Grad Elevation-Maske
+# 1. CFG-NAV5: Automotive-Modus (DynModel 4)
 NAV5_PAYLOAD = (
-    b"\x11\x00"  # Mask (bit 0 & 4: DynModel & MinElev)
+    b"\x01\x00"  # Mask (bit 0: DynModel only)
     b"\x04"  # DynModel (4 = Automotive)
     b"\x03"  # FixMode (3 = Auto 2D/3D)
     b"\x00\x00\x00\x00"  # FixedAlt
