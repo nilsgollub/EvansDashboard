@@ -64,6 +64,8 @@ def load_last_fix(path=LAST_FIX_PATH):
             data = json.load(f)
     except (OSError, ValueError):
         return None
+    if not isinstance(data, dict):
+        return None
     if data.get("lat") is None or data.get("lon") is None or data.get("time") is None:
         return None
     return data

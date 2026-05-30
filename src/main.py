@@ -383,6 +383,9 @@ def _install_shutdown_handler(ttff_logger):
         if ttff_logger:
             ttff_logger.shutdown(reason=name)
         close_hardware_watchdog()
+        # pygame.quit() vor sys.exit, sonst kann das TTY auf dem Pi-Framebuffer
+        # nach systemctl stop in unbrauchbarem Zustand zurueckbleiben.
+        pygame.quit()
         sys.exit(0)
 
     signal.signal(signal.SIGTERM, _handler)

@@ -26,6 +26,13 @@ def test_malformed_file_returns_none(tmp_path):
     assert load_last_fix(str(path)) is None
 
 
+def test_non_dict_json_returns_none(tmp_path):
+    # Gueltiges JSON, aber kein Objekt -> data.get(...) wuerde sonst AttributeError werfen.
+    path = tmp_path / "list.json"
+    path.write_text("[1, 2, 3]")
+    assert load_last_fix(str(path)) is None
+
+
 def test_save_without_position_is_noop(tmp_path):
     path = str(tmp_path / "x.json")
     assert save_last_fix(None, 7.152, path=path) is False
