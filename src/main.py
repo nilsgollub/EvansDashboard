@@ -2,6 +2,7 @@ import glob
 import math
 import os
 import random
+import signal
 import subprocess
 import sys
 import threading
@@ -20,7 +21,9 @@ from config import (
 )
 from gps_reader import GPSReader
 from osm_api import get_speed_limit
+from state_store import save_last_fix
 from sun_calculator import get_dimming_factor
+from ttff_log import TTFFLogger
 from ui import DashboardUI
 from version import VERSION
 from weather import weather_code_to_desc
@@ -111,6 +114,36 @@ def feed_watchdogs():
             f.write(str(time.time()))
     except Exception:
         pass
+
+
+def close_hardware_watchdog():
+    """Deaktiviert den Watchdog kontrolliert (Magic-Close 'V'), damit der Kernel
+    den Pi nach `systemctl stop` nicht zwangsrebootet."""
+    global _watchdog_fd
+    if _watchdog_fd is None:
+        return
+    try:
+        os.write(_watchdog_fd, b"V")
+        os.close(_watchdog_fd)
+        print("[SYSTEM] Hardware-Watchdog sauber geschlossen (Magic-Close 'V').")
+    except Exception as e:
+        print(f"[SYSTEM] Fehler beim Schliessen des Watchdogs: {e}")
+    finally:
+        _watchdog_fd = None
+
+
+def persist_current_fix():
+    """Schreibt die zuletzt bekannte Position atomar auf Disk, sobald ein Fix da ist."""
+    last_up = current_state.get("last_update", 0.0)
+    if last_up <= 0.0:
+        return False
+    return save_last_fix(
+        lat=current_state.get("lat"),
+        lon=current_state.get("lon"),
+        altitude=current_state.get("altitude"),
+        sats=current_state.get("sats"),
+        t=last_up,
+    )
 
 
 def run_simulation():
@@ -336,6 +369,26 @@ def wifi_monitor():
         time.sleep(15)
 
 
+def _install_shutdown_handler(ttff_logger):
+    """Faengt SIGTERM/SIGINT ab, flusht den letzten Fix und gibt den Watchdog frei.
+
+    Bei hartem Stromabriss (Zuendung aus) bringt das nichts - aber jedes
+    'systemctl stop', 'Ctrl-C' oder OOM-Kill kommt jetzt sauber durch.
+    """
+
+    def _handler(signum, _frame):
+        name = signal.Signals(signum).name
+        print(f"[MAIN] Shutdown-Signal {name} empfangen.")
+        persist_current_fix()
+        if ttff_logger:
+            ttff_logger.shutdown(reason=name)
+        close_hardware_watchdog()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, _handler)
+    signal.signal(signal.SIGINT, _handler)
+
+
 def main():
     print(f"[MAIN] Evans Co-Pilot Dashboard v{VERSION}")
     print("[MAIN] Dashboard gestartet. Beenden mit 'Escape'.")
@@ -345,8 +398,12 @@ def main():
     set_hardware_backlight(1.0)  # Zu Beginn explizit auf 100% Helligkeit setzen
     init_hardware_watchdog()
 
+    # TTFF-Diagnose und Shutdown-Handler
+    ttff_logger = TTFFLogger()
+    _install_shutdown_handler(ttff_logger)
+
     # GPS Thread starten
-    gps_reader = GPSReader(mode=GPS_MODE, ip=GPS_IP, port=GPS_PORT)
+    gps_reader = GPSReader(mode=GPS_MODE, ip=GPS_IP, port=GPS_PORT, ttff_logger=ttff_logger)
     gps_thread = threading.Thread(target=gps_reader.read_data, args=(current_state,), daemon=True)
     gps_thread.start()
 
@@ -384,6 +441,13 @@ def main():
 
         # Watchdogs füttern (in jeder Iteration der Rendering-Schleife)
         feed_watchdogs()
+
+        # Letzte bekannte Position alle ~30 s persistieren (atomar). Falls die
+        # Zuendung unmittelbar danach ausgeht, ist die Position auf der SD-Karte
+        # und steht beim naechsten Start als AID-INI-Hint zur Verfuegung.
+        # 30 FPS * 30 s = 900 Frames.
+        if frame_count % 900 == 0:
+            persist_current_fix()
 
         # Prüfen, ob wir im Simulationsmodus sind (kein GPS-Update in den letzten 10s und Simulation aktiv)
         last_up = current_state.get("last_update", 0.0)
@@ -433,6 +497,10 @@ def main():
         # 30 Frames per Second
         clock.tick(30)
 
+    # Normale Beendigung (ESC): letzten Fix flushen und Watchdog sauber schliessen.
+    persist_current_fix()
+    ttff_logger.shutdown(reason="esc")
+    close_hardware_watchdog()
     pygame.quit()
     sys.exit()
 

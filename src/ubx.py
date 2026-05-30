@@ -5,6 +5,9 @@ damit gps_reader.py und das Diagnose-Tool test_gps.py garantiert identische
 Bytes senden.
 """
 
+import struct
+from datetime import datetime, timezone
+
 
 def build_ubx_packet(msg_class, msg_id, payload):
     """Baut ein vollstaendiges UBX-Paket inkl. Sync-Bytes und Fletcher-Pruefsumme."""
@@ -115,3 +118,81 @@ def configure_neo7m(serial_conn, log=print):
         except Exception as e:  # noqa: BLE001 - ein Schritt darf den Rest nicht stoppen
             if log:
                 log(f"[GPS] Fehler bei {label}: {e}")
+
+
+# --- AID-INI: Warm-Start-Hinweis (UBX 0x0B 0x01) ---------------------------------
+#
+# Wir injizieren letzte bekannte Position + grobe UTC-Zeit ins NEO-7M, damit es
+# nicht blind nach allen Satelliten suchen muss. Macht aus einem Cold Start einen
+# Warm Start, voellig unabhaengig von der BBR-Stuetzbatterie des Moduls.
+
+AID_INI_FLAG_POS = 1 << 0
+AID_INI_FLAG_TIME = 1 << 1
+AID_INI_FLAG_LLA = 1 << 5  # Position als geodaetisch (lat/lon/alt) statt ECEF
+AID_INI_FLAG_UTC = 1 << 10  # Zeit als UTC (statt GPS week/TOW)
+
+
+def build_aid_ini(
+    lat_deg,
+    lon_deg,
+    alt_m=0.0,
+    dt_utc=None,
+    pos_acc_cm=1_000_000,  # 10 km - konservativ, GPS-Suchellipse darf nicht zu eng sein
+    t_acc_ms=3_600_000,  # 1 h - faengt fake-hwclock-Drift ab
+    inject_time=True,
+):
+    """Baut ein UBX-AID-INI-Paket (48 Byte Payload) im LLA/UTC-Modus.
+
+    Position kommt aus der letzten gespeicherten Lage; Zeit aus der Pi-Systemuhr.
+    Falls die Pi-Uhr offensichtlich unsicher ist, kann der Aufrufer
+    ``inject_time=False`` setzen - dann wird nur die Position uebergeben.
+    """
+    if dt_utc is None:
+        dt_utc = datetime.now(timezone.utc)
+
+    lat_i = int(round(lat_deg * 1e7))
+    lon_i = int(round(lon_deg * 1e7))
+    alt_cm = int(round(alt_m * 100.0))
+
+    flags = AID_INI_FLAG_POS | AID_INI_FLAG_LLA
+    if inject_time:
+        flags |= AID_INI_FLAG_TIME | AID_INI_FLAG_UTC
+        # wnoOrDate: yymm als (year_yy * 256 + month), LE in U2.
+        year_yy = dt_utc.year % 100
+        wno_or_date = (year_yy << 8) | dt_utc.month
+        # towOrTime: day << 24 | hour << 16 | minute << 8 | second
+        tow_or_time = (dt_utc.day << 24) | (dt_utc.hour << 16) | (dt_utc.minute << 8) | dt_utc.second
+        t_acc_ms_used = int(t_acc_ms)
+    else:
+        wno_or_date = 0
+        tow_or_time = 0
+        t_acc_ms_used = 0
+
+    payload = struct.pack(
+        "<iiiIHHIiIIiII",
+        lat_i,  # ecefXOrLat
+        lon_i,  # ecefYOrLon
+        alt_cm,  # ecefZOrAlt
+        int(pos_acc_cm),  # posAcc
+        0,  # tmCfg
+        wno_or_date,  # wnoOrDate
+        tow_or_time,  # towOrTime
+        0,  # towNs
+        t_acc_ms_used,  # tAccMs
+        0,  # tAccNs
+        0,  # clkDOrFreq
+        0,  # clkDAccOrFreqAcc
+        flags,  # flags
+    )
+    assert len(payload) == 48, f"AID-INI muss 48 Byte sein, ist {len(payload)}"
+    return build_ubx_packet(0x0B, 0x01, payload)
+
+
+def send_aid_ini(serial_conn, lat_deg, lon_deg, **kwargs):
+    """Sendet AID-INI ueber die offene serielle Verbindung; No-op ohne Verbindung."""
+    if not serial_conn or not serial_conn.is_open:
+        return False
+    packet = build_aid_ini(lat_deg, lon_deg, **kwargs)
+    serial_conn.write(packet)
+    serial_conn.flush()
+    return True
