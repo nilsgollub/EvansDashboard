@@ -1,17 +1,30 @@
 import logging
 import time
+from datetime import datetime, timezone
 
 import pynmea2
 import serial
 
-from ubx import configure_neo7m
+from state_store import load_last_fix
+from ubx import configure_neo7m, send_aid_ini
 
 logger = logging.getLogger(__name__)
+
+# Maximales Alter eines gespeicherten Fixes, bei dem wir die UTC-Zeit noch
+# mitinjizieren. Aelter -> nur Position, weil die Pi-Uhr nach so langer Pause
+# vermutlich aus fake-hwclock kommt und stark daneben liegt.
+_MAX_TIME_HINT_AGE_S = 6 * 3600
 
 
 class GPSReader:
     def __init__(
-        self, mode="serial", ip=None, port=20000, ports=["/dev/ttyACM0", "/dev/ttyUSB0", "/dev/serial0"], baudrate=9600
+        self,
+        mode="serial",
+        ip=None,
+        port=20000,
+        ports=["/dev/ttyACM0", "/dev/ttyUSB0", "/dev/serial0"],
+        baudrate=9600,
+        ttff_logger=None,
     ):
         # Wir behalten die Parameter fuer Abwaertskompatibilitaet bei, erzwingen aber den seriellen Modus
         self.mode = "serial"
@@ -19,6 +32,48 @@ class GPSReader:
         self.baudrate = baudrate
         self.serial_conn = None
         self.current_port = None
+        self.ttff_logger = ttff_logger
+        self._ini_sent = False
+        self._last_gsv_log = 0.0
+
+    def _inject_warm_start_hint(self):
+        """Schiebt die letzte bekannte Position (+ Zeit) als AID-INI ins NEO-7M.
+
+        Wirkt auch ohne intakte V_BCKP-Stuetzbatterie: macht aus einem Cold
+        Start einen Warm Start, weil das Modul nicht blind nach allen GPS-
+        Satelliten suchen muss.
+        """
+        last = load_last_fix()
+        if not last:
+            if self.ttff_logger:
+                self.ttff_logger.session_started(ini_injected=False)
+            return
+        age_s = time.time() - last["time"]
+        inject_time = age_s < _MAX_TIME_HINT_AGE_S
+        try:
+            ok = send_aid_ini(
+                self.serial_conn,
+                last["lat"],
+                last["lon"],
+                alt_m=last.get("altitude") or 0.0,
+                dt_utc=datetime.now(timezone.utc),
+                inject_time=inject_time,
+            )
+        except Exception as e:  # noqa: BLE001 - AID-INI ist best effort
+            print(f"[GPS] AID-INI fehlgeschlagen: {e}")
+            ok = False
+        if ok:
+            print(
+                f"[GPS] AID-INI gesendet: lat={last['lat']:.4f}, lon={last['lon']:.4f}, "
+                f"age={age_s:.0f}s, time={'ja' if inject_time else 'nein'}"
+            )
+        if self.ttff_logger:
+            self.ttff_logger.session_started(
+                ini_injected=ok,
+                restored_lat=last["lat"],
+                restored_lon=last["lon"],
+                restored_age_s=round(age_s, 1),
+            )
 
     def connect(self, state_dict=None):
         for port in self.ports:
@@ -32,6 +87,12 @@ class GPSReader:
 
                 # Optimierte U-Blox NEO-7M Konfiguration (gemeinsame Quelle: ubx.py)
                 configure_neo7m(self.serial_conn)
+
+                # Warm-Start-Hinweis nur einmal pro Prozess - bei spaeteren
+                # Reconnects ist im Chip bereits frischere Info.
+                if not self._ini_sent:
+                    self._inject_warm_start_hint()
+                    self._ini_sent = True
 
                 return True
             except serial.SerialException as e:
@@ -63,6 +124,8 @@ class GPSReader:
                                 state_dict["heading"] = float(msg.track)
                             except (ValueError, TypeError):
                                 pass
+                        if self.ttff_logger:
+                            self.ttff_logger.first_fix(msg.latitude, msg.longitude, state_dict.get("sats", 0))
                         print(
                             f"[GPS] RMC Update -> Speed: {speed_kmh:.1f} km/h, Pos: {msg.latitude:.4f}, {msg.longitude:.4f}, Course: {state_dict.get('heading', 0.0)}°"
                         )
@@ -97,6 +160,11 @@ class GPSReader:
                                 or (time.time() - state_dict.get("last_update", 0.0)) >= 10.0
                             ):
                                 state_dict["sats"] = sats_in_view
+                            # TTFF-Diagnose: gedrosselt (max alle 60 s) sichtbare Sats loggen
+                            now = time.time()
+                            if self.ttff_logger and (now - self._last_gsv_log) >= 60.0:
+                                self.ttff_logger.sats_in_view(sats_in_view)
+                                self._last_gsv_log = now
                             print(f"[GPS] GSV ({line[1:3]}) -> Satelliten in Sicht: {sats_in_view}")
                         except (ValueError, TypeError, AttributeError):
                             pass
