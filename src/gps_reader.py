@@ -49,7 +49,12 @@ class GPSReader:
                 self.ttff_logger.session_started(ini_injected=False)
             return
         age_s = time.time() - last["time"]
-        inject_time = age_s < _MAX_TIME_HINT_AGE_S
+        # Zeit nur injizieren, wenn die Pi-Uhr plausibel zur gespeicherten Zeit passt.
+        # Negativer age_s = Systemuhr liegt VOR der zuletzt gespeicherten Zeit (typisch
+        # nach hartem Aus + fake-hwclock-Checkpoint vor dem letzten Fix-Write); zu
+        # grosser age_s = der Hint ist sowieso veraltet. In beiden Faellen waere die
+        # injizierte Zeit eher schaedlich als hilfreich.
+        inject_time = 0 <= age_s < _MAX_TIME_HINT_AGE_S
         try:
             ok = send_aid_ini(
                 self.serial_conn,
