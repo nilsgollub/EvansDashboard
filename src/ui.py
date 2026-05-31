@@ -453,8 +453,11 @@ class DashboardUI:
         pygame.draw.line(self.screen, (30, 80, 40), (cx - r, cy), (cx + r, cy), 1)
         pygame.draw.line(self.screen, (30, 80, 40), (cx, cy - r), (cx, cy + r), 1)
 
-        # Rotierender Sweep mit kleinem Nachleucht-Schweif (eine Umdrehung / 2.5 s)
-        sweep_angle = (time.time() * (2 * math.pi / 2.5)) % (2 * math.pi)
+        # Rotierender Sweep mit kleinem Nachleucht-Schweif (eine Umdrehung / 2.5 s).
+        # pygame.time.get_ticks() ist monoton - im Gegensatz zu time.time(), das beim
+        # ersten NTP-/GPS-Sync auf dem RTC-losen Pi mitten in der Suchphase springen
+        # und den Sweep stocken liesse.
+        sweep_angle = ((pygame.time.get_ticks() / 1000.0) * (2 * math.pi / 2.5)) % (2 * math.pi)
         for i in range(0, 9):
             a = sweep_angle - i * 0.07
             ex = cx + int(r * math.cos(a))
