@@ -26,6 +26,8 @@ class DashboardUI:
         self.font_time = pygame.font.SysFont("arial", 28, bold=True)
         self.font_date = pygame.font.SysFont("arial", 18)
         self.font_weather = pygame.font.SysFont("arial", 22, bold=True)
+        # Such-Screen Titel (kleiner als font_limit, damit er neben dem Radar nicht abgeschnitten wird)
+        self.font_search = pygame.font.SysFont("arial", 54, bold=True)
 
         # Farben (RGB)
         self.COLOR_BG = (15, 15, 20)  # Sehr dunkles Blau-Grau
@@ -305,7 +307,12 @@ class DashboardUI:
     ):
         self.screen.fill(self.COLOR_BG)
         self._render_top_bar(is_simulated, has_fix, gps_connected, weather_temp, weather_desc, wifi_signal)
-        self._render_center(current_speed, speed_limit, version)
+        # In der Suchphase (echter Sensor, aber noch kein Fix und keine Simulation)
+        # zeigen wir statt Tacho/Schild eine kinderfreundliche Such-Animation.
+        if not has_fix and not is_simulated:
+            self._render_searching(sats, gps_connected, version)
+        else:
+            self._render_center(current_speed, speed_limit, version)
         self._render_bottom_bar(heading, altitude, road_type, sats)
         self._apply_dimming(dim_factor)
 
@@ -422,6 +429,82 @@ class DashboardUI:
         self.screen.blit(kmh_surface, kmh_rect)
 
         # 2.3 Versionsanzeige knapp über der unteren Leiste ganz rechts
+        if version:
+            ver_surf = self.font_tag.render(f"v{version}", True, (90, 90, 105))
+            ver_rect = ver_surf.get_rect(bottomright=(self.width - 20, 255))
+            self.screen.blit(ver_surf, ver_rect)
+
+    def _render_searching(self, sats, gps_connected, version):
+        """Such-Animation fuer Evan, solange noch kein GPS-Fix da ist.
+
+        Links: Radar-Sweep mit kleinen Punkten pro sichtbarem Satelliten.
+        Rechts: grosse, freundliche Sat-Zahl plus motivierender Untertitel,
+        der sich mit der Sat-Anzahl mitfaerbt.
+        """
+        sat_count = max(0, int(sats or 0))
+
+        # --- Radar (links) ---
+        cx, cy = 110, 155
+        r = 75
+        # Dunkler Radar-Hintergrund + konzentrische Ringe + Fadenkreuz
+        pygame.draw.circle(self.screen, (8, 22, 12), (cx, cy), r)
+        for ring in (r, int(r * 0.66), int(r * 0.33)):
+            pygame.draw.circle(self.screen, (30, 80, 40), (cx, cy), ring, 1)
+        pygame.draw.line(self.screen, (30, 80, 40), (cx - r, cy), (cx + r, cy), 1)
+        pygame.draw.line(self.screen, (30, 80, 40), (cx, cy - r), (cx, cy + r), 1)
+
+        # Rotierender Sweep mit kleinem Nachleucht-Schweif (eine Umdrehung / 2.5 s)
+        sweep_angle = (time.time() * (2 * math.pi / 2.5)) % (2 * math.pi)
+        for i in range(0, 9):
+            a = sweep_angle - i * 0.07
+            ex = cx + int(r * math.cos(a))
+            ey = cy + int(r * math.sin(a))
+            fade = max(0.0, 1.0 - i / 9.0)
+            color = (int(40 * fade), int(210 * fade), int(60 * fade))
+            pygame.draw.line(self.screen, color, (cx, cy), (ex, ey), 2)
+
+        # Pro sichtbarem Sat ein Punkt - Position deterministisch (goldener Winkel),
+        # damit die Punkte nicht von Frame zu Frame herumspringen.
+        for i in range(min(sat_count, 16)):
+            angle = math.radians(i * 137.508)
+            rad = int(r * 0.25) + ((i * 11) % int(r * 0.55))
+            dx = cx + int(rad * math.cos(angle))
+            dy = cy + int(rad * math.sin(angle))
+            pygame.draw.circle(self.screen, (220, 240, 220), (dx, dy), 3)
+            pygame.draw.circle(self.screen, (40, 80, 40), (dx, dy), 4, 1)
+
+        # --- Text-Bereich (rechts) ---
+        text_cx = (cx + r + 20 + self.width - 20) // 2
+
+        # Grosses freundliches "Suche..."
+        title_surf = self.font_search.render("Suche...", True, self.COLOR_WHITE)
+        title_rect = title_surf.get_rect(midtop=(text_cx, 80))
+        self.screen.blit(title_surf, title_rect)
+
+        # Sat-Zaehler in der Farbe der Stimmung
+        if sat_count >= 4:
+            counter_color = self.COLOR_GREEN
+            sub_text = "Gleich geht's los!"
+            sub_color = (180, 240, 180)
+        elif sat_count >= 1:
+            counter_color = self.COLOR_YELLOW
+            sub_text = "Schau zum Himmel!"
+            sub_color = self.COLOR_YELLOW
+        else:
+            counter_color = self.COLOR_GRAY
+            sub_text = "Warte kurz..." if gps_connected else "Kein GPS-Sensor"
+            sub_color = self.COLOR_GRAY
+
+        sat_word = "Satellit" if sat_count == 1 else "Satelliten"
+        counter_surf = self.font_weather.render(f"{sat_count} {sat_word}", True, counter_color)
+        counter_rect = counter_surf.get_rect(midtop=(text_cx, 165))
+        self.screen.blit(counter_surf, counter_rect)
+
+        sub_surf = self.font_info.render(sub_text, True, sub_color)
+        sub_rect = sub_surf.get_rect(midtop=(text_cx, 200))
+        self.screen.blit(sub_surf, sub_rect)
+
+        # Versionsanzeige beibehalten, damit das Layout konsistent bleibt
         if version:
             ver_surf = self.font_tag.render(f"v{version}", True, (90, 90, 105))
             ver_rect = ver_surf.get_rect(bottomright=(self.width - 20, 255))
