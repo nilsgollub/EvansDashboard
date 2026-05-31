@@ -1,10 +1,9 @@
-import os
 import time
 
 import pytest
 
 import gps_reader
-from state_store import save_last_fix
+import state_store
 
 
 class FakeSerial:
@@ -30,10 +29,9 @@ def _capture_aid_ini_kwargs(monkeypatch, tmp_path, age_seconds):
     """Speichert einen Fix mit einem Alter von `age_seconds` Sekunden und
     faengt die kwargs an `send_aid_ini` ein."""
     path = str(tmp_path / "last_fix.json")
-    save_last_fix(46.0, 7.0, t=time.time() - age_seconds, path=path)
-    monkeypatch.setenv("EVANS_STATE_DIR", str(tmp_path))
-    # state_store.LAST_FIX_PATH wurde beim Import festgelegt - umbiegen
-    monkeypatch.setattr(gps_reader, "load_last_fix", lambda: __import__("state_store").load_last_fix(path))
+    state_store.save_last_fix(46.0, 7.0, t=time.time() - age_seconds, path=path)
+    # gps_reader.load_last_fix nutzt den Default-Pfad - hier auf unsere tmp-Datei umbiegen.
+    monkeypatch.setattr(gps_reader, "load_last_fix", lambda: state_store.load_last_fix(path))
 
     captured = {}
 
@@ -78,15 +76,3 @@ def test_no_stored_fix_is_noop(tmp_path, monkeypatch, reader_with_serial):
     monkeypatch.setattr(gps_reader, "send_aid_ini", lambda *a, **kw: called.append(1))
     reader_with_serial._inject_warm_start_hint()
     assert called == []
-
-
-# kleines Aufraeumen falls Tests parallel laufen
-@pytest.fixture(autouse=True)
-def _cleanup_env(monkeypatch):
-    monkeypatch.delenv("EVANS_TTFF_LOG", raising=False)
-    yield
-    if os.environ.get("EVANS_TTFF_LOG"):
-        try:
-            os.remove(os.environ["EVANS_TTFF_LOG"])
-        except OSError:
-            pass
