@@ -2,7 +2,6 @@
 
 > Ein interaktives, kindgerechtes Auto-Co-Pilot-Dashboard für den Raspberry Pi Zero WH, das aktuelle Geschwindigkeiten und Geschwindigkeitsbegrenzungen (via OpenStreetMap) visualisiert.
 
-Dieses Projekt entstand für **Evan (geb. Juni 2021)**, um seine Faszination für Geschwindigkeiten und Tempolimits beim Autofahren spielerisch zu begleiten und die ständigen Fragen ("Wie schnell dürfen wir hier fahren?", "Wie schnell fahren wir gerade?") visuell und kindgerecht zu beantworten.
 
 ---
 
